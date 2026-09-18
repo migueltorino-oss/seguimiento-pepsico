@@ -327,12 +327,23 @@ details.det-col[open] > summary .caret { transform: rotate(90deg); }
 .bt-mas { padding: 0 16px 14px; }
 .bt-vacio { padding: 14px 16px; color: var(--muted); font-size: 13.5px; }
 
-/* cuadro "Objetivo Fully Digital por vendedor y taxonomía": 4 bloques de 3 columnas */
+/* cuadro "Objetivo Fully Digital por vendedor y taxonomía": 4 bloques de 3 columnas.
+   Ancho fijo y celdas compactas para que las 14 columnas entren sin scroll horizontal. */
+.fdtax-tabla { table-layout: fixed; width: 100%; }
+.fdtax-tabla th, .fdtax-tabla td { padding: 5px 4px; }
+.fdtax-tabla thead th { font-size: 9.5px; letter-spacing: .02em; }
+.fdtax-tabla tbody td, .fdtax-tabla tfoot td { font-size: 13px; }
+.fdtax-tabla td.nom { overflow: hidden; text-overflow: ellipsis; }
 .fdtax-tabla th.grupo {
   text-align: center; border-bottom: 1px solid var(--border);
   color: var(--ink2); font-size: 11.5px; letter-spacing: .06em;
 }
 .fdtax-tabla th.grupo:nth-of-type(even) { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+@media (max-width: 900px) {
+  .fdtax-tabla thead th { font-size: 9px; }
+  .fdtax-tabla tbody td, .fdtax-tabla tfoot td { font-size: 12px; }
+  .fdtax-tabla th, .fdtax-tabla td { padding: 4px 2px; }
+}
 .fdtax-tabla tbody tr.subt td { font-weight: 650; background: var(--page); }
 .fdtax-tabla td.fdfalta { color: var(--bad); font-weight: 650; }
 .fdtax-tabla td.fdok { color: var(--good); font-weight: 650; }
@@ -1506,10 +1517,11 @@ function cardObjFDTax(eqs) {
         bajas y con todos los filtros de arriba.</span>
     </div>
     <div class="tbl-scroll"><table class="fdtax-tabla">
+      <colgroup><col style="width:4.5%"><col style="width:17.5%">${TAXOS_FD.map(() => '<col><col><col>').join('')}</colgroup>
       <thead>
         <tr><th class="nom" rowspan="2">Cód.</th><th class="nom" rowspan="2">Vendedor</th>
           ${TAXOS_FD.map(t => `<th colspan="3" class="grupo">Taxonomía ${t}</th>`).join('')}</tr>
-        <tr>${TAXOS_FD.map(() => '<th>Objetivo</th><th>Fully Digital</th><th>Falta al obj.</th>').join('')}</tr>
+        <tr>${TAXOS_FD.map(() => '<th title="Objetivo de clientes Fully Digital">Obj.</th><th title="Clientes Fully Digital logrados">FD</th><th title="Clientes que faltan para llegar al objetivo">Falta</th>').join('')}</tr>
       </thead>
       <tbody>${filas.map(f => `<tr class="${f.sub ? 'subt' : ''}">
         <td class="nom cod">${esc(f.cod)}</td><td class="nom">${esc(f.nom)}</td>${celdas(f)}</tr>`).join('')}</tbody>
