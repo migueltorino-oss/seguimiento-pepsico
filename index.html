@@ -345,6 +345,9 @@ details.det-col[open] > summary .caret { transform: rotate(90deg); }
   .fdtax-tabla th, .fdtax-tabla td { padding: 4px 2px; }
 }
 .fdtax-tabla tbody tr.subt td { font-weight: 650; background: var(--page); }
+/* bloque final con el total de las cuatro taxonomías */
+.fdtax-tabla th.gtot, .fdtax-tabla td.gtot { border-left: 2px solid var(--border); }
+.fdtax-tabla th.grupo.gtot { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--ink); }
 .fdtax-tabla td.fdfalta { color: var(--bad); font-weight: 650; }
 .fdtax-tabla td.fdok { color: var(--good); font-weight: 650; }
 @media (max-width: 780px) { .bt-tabla td.nom, .bt-tabla td.dir { max-width: 130px; } }
@@ -1481,11 +1484,14 @@ function cardObjFDTax(eqs) {
     tot.obj[t] = filas.filter(f => !f.sub).reduce((a, f) => a + f.obj[t], 0);
     tot.fd[t] = filas.filter(f => !f.sub).reduce((a, f) => a + f.fd[t], 0);
   }
-  const celdas = f => TAXOS_FD.map(t => {
-    const falta = Math.max(0, f.obj[t] - f.fd[t]);
-    return `<td>${fmt(f.obj[t])}</td><td><b>${fmt(f.fd[t])}</b></td>
+  // al final de cada fila, el mismo trío pero con el TOTAL de las cuatro taxonomías
+  const trio = (o, n, gtot) => {
+    const falta = Math.max(0, o - n);
+    return `<td class="${gtot ? 'gtot' : ''}">${fmt(o)}</td><td><b>${fmt(n)}</b></td>
       <td class="${falta ? 'fdfalta' : 'fdok'}">${falta ? fmt(falta) : '0 ✔'}</td>`;
-  }).join('');
+  };
+  const celdas = f => TAXOS_FD.map(t => trio(f.obj[t], f.fd[t])).join('')
+    + trio(TAXOS_FD.reduce((a, t) => a + f.obj[t], 0), TAXOS_FD.reduce((a, t) => a + f.fd[t], 0), true);
   const card = document.createElement('div');
   card.className = 'card';
   card.innerHTML = `
@@ -1499,11 +1505,13 @@ function cardObjFDTax(eqs) {
         bajas y con todos los filtros de arriba.</span>
     </div>
     <div class="tbl-scroll"><table class="fdtax-tabla">
-      <colgroup><col style="width:4.5%"><col style="width:17.5%">${TAXOS_FD.map(() => '<col><col><col>').join('')}</colgroup>
+      <colgroup><col style="width:4.5%"><col style="width:15.5%">${TAXOS_FD.map(() => '<col><col><col>').join('')}<col><col><col></colgroup>
       <thead>
         <tr><th class="nom" rowspan="2">Cód.</th><th class="nom" rowspan="2">Vendedor</th>
-          ${TAXOS_FD.map(t => `<th colspan="3" class="grupo">Taxonomía ${t}</th>`).join('')}</tr>
-        <tr>${TAXOS_FD.map(() => '<th title="Objetivo de clientes Fully Digital">Obj.</th><th title="Clientes Fully Digital logrados">FD</th><th title="Clientes que faltan para llegar al objetivo">Falta</th>').join('')}</tr>
+          ${TAXOS_FD.map(t => `<th colspan="3" class="grupo">Taxonomía ${t}</th>`).join('')}
+          <th colspan="3" class="grupo gtot">Total del vendedor</th></tr>
+        <tr>${TAXOS_FD.map(() => '<th title="Objetivo de clientes Fully Digital">Obj.</th><th title="Clientes Fully Digital logrados">FD</th><th title="Clientes que faltan para llegar al objetivo">Falta</th>').join('')}
+          <th class="gtot" title="Objetivo total de clientes Fully Digital">Obj.</th><th title="Clientes Fully Digital logrados en total">FD</th><th title="Clientes que faltan para el objetivo total">Falta</th></tr>
       </thead>
       <tbody>${filas.map(f => `<tr class="${f.sub ? 'subt' : ''}">
         <td class="nom cod">${esc(f.cod)}</td><td class="nom">${esc(f.nom)}</td>${celdas(f)}</tr>`).join('')}</tbody>
@@ -2015,11 +2023,14 @@ function cardObjTPTax(eqs) {
     tot.obj[t] = filas.filter(f => !f.sub).reduce((a, f) => a + f.obj[t], 0);
     tot.tp[t] = filas.filter(f => !f.sub).reduce((a, f) => a + f.tp[t], 0);
   }
-  const celdas = f => TAXOS_TP.map(t => {
-    const falta = Math.max(0, f.obj[t] - f.tp[t]);
-    return `<td>${fmt(f.obj[t])}</td><td><b>${fmt(f.tp[t])}</b></td>
+  // al final de cada fila, el mismo trío pero con el TOTAL de las cuatro taxonomías
+  const trio = (o, n, gtot) => {
+    const falta = Math.max(0, o - n), c = gtot ? ' gtot' : '';
+    return `<td class="${c.trim()}">${fmt(o)}</td><td><b>${fmt(n)}</b></td>
       <td class="${falta ? 'fdfalta' : 'fdok'}">${falta ? fmt(falta) : '0 ✔'}</td>`;
-  }).join('');
+  };
+  const celdas = f => TAXOS_TP.map(t => trio(f.obj[t], f.tp[t])).join('')
+    + trio(TAXOS_TP.reduce((a, t) => a + f.obj[t], 0), TAXOS_TP.reduce((a, t) => a + f.tp[t], 0), true);
   const card = document.createElement('div');
   card.className = 'card';
   card.innerHTML = `
@@ -2037,11 +2048,13 @@ function cardObjTPTax(eqs) {
         en la misma proporción.${score ? ` Puntaje promedio objetivo: <b>${score}</b>.` : ''}</span>
     </div>
     <div class="tbl-scroll"><table class="fdtax-tabla">
-      <colgroup><col style="width:4.5%"><col style="width:17.5%">${TAXOS_TP.map(() => '<col><col><col>').join('')}</colgroup>
+      <colgroup><col style="width:4.5%"><col style="width:15.5%">${TAXOS_TP.map(() => '<col><col><col>').join('')}<col><col><col></colgroup>
       <thead>
         <tr><th class="nom" rowspan="2">Cód.</th><th class="nom" rowspan="2">Vendedor</th>
-          ${TAXOS_TP.map(t => `<th colspan="3" class="grupo">Taxonomía ${t}</th>`).join('')}</tr>
-        <tr>${TAXOS_TP.map(() => '<th title="Objetivo de Tiendas Perfectas">Obj.</th><th title="Tiendas Perfectas logradas">TP</th><th title="Tiendas que faltan para llegar al objetivo">Falta</th>').join('')}</tr>
+          ${TAXOS_TP.map(t => `<th colspan="3" class="grupo">Taxonomía ${t}</th>`).join('')}
+          <th colspan="3" class="grupo gtot">Total del vendedor</th></tr>
+        <tr>${TAXOS_TP.map(() => '<th title="Objetivo de Tiendas Perfectas">Obj.</th><th title="Tiendas Perfectas logradas">TP</th><th title="Tiendas que faltan para llegar al objetivo">Falta</th>').join('')}
+          <th class="gtot" title="Objetivo total de Tiendas Perfectas">Obj.</th><th title="Tiendas Perfectas logradas en total">TP</th><th title="Tiendas que faltan para el objetivo total">Falta</th></tr>
       </thead>
       <tbody>${filas.map(f => `<tr class="${f.sub ? 'subt' : ''}">
         <td class="nom cod">${esc(f.cod)}</td><td class="nom">${esc(f.nom)}</td>${celdas(f)}</tr>`).join('')}</tbody>
