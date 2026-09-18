@@ -1130,24 +1130,6 @@ function calcObjTP() {
 const objTPVend = cod => OBJTP ? (OBJTP.porVend.get(cod) || 0) : 0;
 const objTPEquipo = eq => eq.vends.reduce((a, v) => a + objTPVend(v.cod), 0);
 const objTPVisible = () => equiposVisibles().reduce((a, eq) => a + objTPEquipo(eq), 0);
-// universo, Tiendas Perfectas, faltantes a validar y peso fraccionario del objetivo TP abiertos
-// por taxonomia, para un conjunto de vendedores (base de la tarjeta por taxonomia y de los KPIs)
-function tpPorTax(vends) {
-  const uni = { tot: 0 }, tp = { tot: 0 }, aval = { tot: 0 }, w = { tot: 0 };
-  for (const t of TAXOS_TP) { uni[t] = 0; tp[t] = 0; aval[t] = 0; w[t] = 0; }
-  for (const v of vends) {
-    const participa = VENDS_OBJ_TP.has(v.cod); // los genericos no llevan objetivo TP: pesan 0
-    for (const i of baseVend(v.cod)) {
-      const t = D.taxo[i] || '', c = catTP(i);
-      uni.tot++; if (uni[t] !== undefined) uni[t]++;
-      if (c === 'tp') { tp.tot++; if (tp[t] !== undefined) tp[t]++; }
-      else if (c === 'aval') { aval.tot++; if (aval[t] !== undefined) aval[t]++; }
-      if (OBJTP && participa) { const x = pesoTP(OBJTP.cfg, t); w.tot += x; if (w[t] !== undefined) w[t] += x; }
-    }
-  }
-  return { uni, tp, aval, w };
-}
-
 // ---------- KPIs ----------
 // tarjetas "% FD / CCC+Pendientes" (global, objetivo y por taxonomia) — se muestran en las
 // solapas CCC y Fully Digital y Mi Negocio (pedido del usuario 2026-09-09)
@@ -1985,55 +1967,85 @@ function cardTPGeneral(eqs) {
     </table></div>`;
   return card;
 }
-// tarjeta "Objetivo Tienda Perfecta por taxonomia": objetivo del distribuidor abierto por segmento,
-// logrado, faltantes a validar y avance (pedido del usuario 2026-09-14). Modelo: cardObjFDTax.
-function cardObjTPTax(eqs) {
-  const { uni, tp, aval, w } = tpPorTax(eqs.flatMap(eq => eq.vends));
-  // el objetivo de cada taxonomia se reparte forzando el total visible, asi las filas suman
-  // exactamente el numero que muestran las tarjetas y las tablas
-  const oTot = objTPVisible();
-  const objT = repartoEnteros(TAXOS_TP.map(t => [t, w[t]]), oTot);
-  // repartoEnteros absorbe a lo sumo ±1 por fila (un solo pase), o sea ±4 con cuatro taxonomias.
-  // Como oTot sale de los enteros por VENDEDOR (redondeados sobre los equipos que participan) y aca se redondea
-  // por TAXONOMIA sobre un subconjunto (un equipo, un dia, un sub ramo), la brecha entre ambos
-  // redondeos puede superar esas 4 unidades y las filas dejarian de sumar el pie. El sobrante que
-  // quede se vuelca en la taxonomia de mayor peso, que es donde menos distorsiona (nunca bajo cero).
-  const restoT = oTot - TAXOS_TP.reduce((a, t) => a + (objT.get(t) || 0), 0);
-  if (restoT) {
-    const tMax = TAXOS_TP.reduce((m, t) => w[t] > w[m] ? t : m, TAXOS_TP[0]);
-    objT.set(tMax, Math.max(0, (objT.get(tMax) || 0) + restoT));
+// objetivo TP de UN vendedor abierto por taxonomia: se reparte su entero (el mismo de la columna
+// Obj. TP de las otras tablas) entre A/B/C/D segun el peso de su propia cartera, asi las cuatro
+// celdas suman su objetivo y la fila Total cierra con el general. Los genericos no participan → 0.
+function objTPVendTax(cod) {
+  const peso = {};
+  for (const t of TAXOS_TP) peso[t] = 0;
+  if (OBJTP && VENDS_OBJ_TP.has(cod)) for (const i of baseVend(cod)) {
+    const t = D.taxo[i] || '';
+    if (peso[t] !== undefined) peso[t] += pesoTP(OBJTP.cfg, t);
   }
+  return repartoEnteros(TAXOS_TP.map(t => [t, peso[t]]), objTPVend(cod));
+}
+// Tiendas Perfectas logradas por vendedor, abiertas por taxonomia (mismo criterio que catTP)
+function tpVendTax(cod) {
+  const n = {};
+  for (const t of TAXOS_TP) n[t] = 0;
+  for (const i of baseVend(cod)) if (catTP(i) === 'tp') { const t = D.taxo[i] || ''; if (n[t] !== undefined) n[t]++; }
+  return n;
+}
+// Cuadro pedido por el usuario (2026-09-18, mismo formato que el de Fully Digital): una fila por
+// VENDEDOR y, por cada taxonomia, objetivo TP · Tiendas Perfectas logradas · lo que falta.
+function cardObjTPTax(eqs) {
   const cfg = OBJTP.cfg, score = OBJTP.score;
   const totCfg = TAXOS_TP.reduce((a, t) => a + (cfg[t] || 0), 0);
   // ejemplo con A para explicar el prorrateo: cada cliente A de la cartera de Juan+Flor aporta cfg.A/NT_TP.A tiendas
   const wA = NT_TP.A ? (cfg.A || 0) / NT_TP.A : 0;
   const equiposTxt = EQUIPOS_OBJ_TP.map(eq => eq.sup).join(' y ');
   const fmt3 = x => x.toLocaleString('es-AR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  const filas = [];
+  for (const eq of eqs) {
+    const sub = { cod: '', nom: 'Total ' + eq.sup, sub: true, obj: {}, tp: {} };
+    for (const t of TAXOS_TP) { sub.obj[t] = 0; sub.tp[t] = 0; }
+    for (const v of eq.vends) {
+      const o = objTPVendTax(v.cod), p = tpVendTax(v.cod);
+      const fila = { cod: v.cod, nom: titulo(v.nombre), obj: {}, tp: {} };
+      for (const t of TAXOS_TP) {
+        fila.obj[t] = o.get(t) || 0; fila.tp[t] = p[t];
+        sub.obj[t] += fila.obj[t]; sub.tp[t] += fila.tp[t];
+      }
+      filas.push(fila);
+    }
+    if (eqs.length > 1 && eq.vends.length > 1) filas.push(sub);
+  }
+  const tot = { obj: {}, tp: {} };
+  for (const t of TAXOS_TP) {
+    tot.obj[t] = filas.filter(f => !f.sub).reduce((a, f) => a + f.obj[t], 0);
+    tot.tp[t] = filas.filter(f => !f.sub).reduce((a, f) => a + f.tp[t], 0);
+  }
+  const celdas = f => TAXOS_TP.map(t => {
+    const falta = Math.max(0, f.obj[t] - f.tp[t]);
+    return `<td>${fmt(f.obj[t])}</td><td><b>${fmt(f.tp[t])}</b></td>
+      <td class="${falta ? 'fdfalta' : 'fdok'}">${falta ? fmt(falta) : '0 ✔'}</td>`;
+  }).join('');
   const card = document.createElement('div');
   card.className = 'card';
-  const fila = t => {
-    const o = objT.get(t) || 0;
-    return `<tr><td class="nom">Taxonomía ${t}</td><td>${fmt(uni[t])}</td><td>${fmt(o)}</td><td><b>${fmt(tp[t])}</b></td>
-      <td>${uni[t] ? fmtPct(pct(tp[t], uni[t])) : '—'}</td><td>${fmt(aval[t])}</td><td>${fmt(Math.max(0, o - tp[t]))}</td>
-      <td>${o > 0 ? pill(pct(tp[t], o), UMBRAL_AVANCE) : '—'}</td><td>${o > 0 ? fmtPct(pct(tp[t] + aval[t], o)) : '—'}</td></tr>`;
-  };
   card.innerHTML = `
     <div class="card-head">
-      <span class="rol">Objetivo Tienda Perfecta por taxonomía — ${D.labels[OBJTP.mes]}</span>
-      <span class="cobm-sub">Objetivo del distribuidor = ${TAXOS_TP.map(t => `<b>${t}</b> ${fmt(cfg[t] || 0)}`).join(' · ')} = <b>${fmt(totCfg)}</b> tiendas,
+      <span class="rol">Objetivo Tienda Perfecta por vendedor y taxonomía — ${D.labels[OBJTP.mes]}</span>
+      <span class="cobm-sub">Por cada taxonomía: el <b>objetivo</b> de Tiendas Perfectas del vendedor, las que
+        <b>ya son TP</b> y las que le <b>faltan</b> para llegar.
+        Objetivo del distribuidor = ${TAXOS_TP.map(t => `<b>${t}</b> ${fmt(cfg[t] || 0)}`).join(' · ')} = <b>${fmt(totCfg)}</b> tiendas,
         prorrateado entre los vendedores de los equipos de ${esc(equiposTxt)} por la cantidad de clientes de cada
         taxonomía en su cartera (los genéricos no llevan objetivo TP): cada cliente de taxonomía T vale objetivo T /
         clientes T de la cartera de esos equipos. Ejemplo con A: hay ${fmt(NT_TP.A || 0)} clientes A en la cartera de
         ${esc(equiposTxt)}, así que cada cliente A aporta ${fmt(cfg.A || 0)} / ${fmt(NT_TP.A || 0)} = <b>${fmt3(wA)}</b>
-        tiendas al objetivo de su vendedor. Se reajusta solo con las altas y bajas; los filtros recortan el objetivo en la
-        misma proporción.${score ? ` Puntaje promedio objetivo: <b>${score}</b>.` : ''}</span>
+        tiendas al objetivo de su vendedor. Las cuatro celdas de un vendedor suman su objetivo TP total y la fila
+        Total cierra con el objetivo general. Se reajusta solo con las altas y bajas; los filtros recortan el objetivo
+        en la misma proporción.${score ? ` Puntaje promedio objetivo: <b>${score}</b>.` : ''}</span>
     </div>
-    <div class="tbl-scroll"><table>
-      <thead><tr><th class="nom">Taxonomía</th><th>Universo</th><th>Obj. TP</th><th>TP</th><th>% TP / universo</th><th title="cumple portafolio y puntaje pero le falta el OK del supervisor">Falta val. sup.</th><th>Faltan</th><th title="TP / objetivo">Avance</th><th title="total si se validan todas las pendientes, sobre el objetivo">TP + a validar / obj.</th></tr></thead>
-      <tbody>${TAXOS_TP.map(fila).join('')}</tbody>
-      <tfoot><tr><td class="nom">Total</td><td>${fmt(uni.tot)}</td><td>${fmt(oTot)}</td><td>${fmt(tp.tot)}</td>
-        <td>${uni.tot ? fmtPct(pct(tp.tot, uni.tot)) : '—'}</td><td>${fmt(aval.tot)}</td><td>${fmt(Math.max(0, oTot - tp.tot))}</td>
-        <td>${oTot > 0 ? pill(pct(tp.tot, oTot), UMBRAL_AVANCE) : '—'}</td><td>${oTot > 0 ? fmtPct(pct(tp.tot + aval.tot, oTot)) : '—'}</td></tr></tfoot>
+    <div class="tbl-scroll"><table class="fdtax-tabla">
+      <colgroup><col style="width:4.5%"><col style="width:17.5%">${TAXOS_TP.map(() => '<col><col><col>').join('')}</colgroup>
+      <thead>
+        <tr><th class="nom" rowspan="2">Cód.</th><th class="nom" rowspan="2">Vendedor</th>
+          ${TAXOS_TP.map(t => `<th colspan="3" class="grupo">Taxonomía ${t}</th>`).join('')}</tr>
+        <tr>${TAXOS_TP.map(() => '<th title="Objetivo de Tiendas Perfectas">Obj.</th><th title="Tiendas Perfectas logradas">TP</th><th title="Tiendas que faltan para llegar al objetivo">Falta</th>').join('')}</tr>
+      </thead>
+      <tbody>${filas.map(f => `<tr class="${f.sub ? 'subt' : ''}">
+        <td class="nom cod">${esc(f.cod)}</td><td class="nom">${esc(f.nom)}</td>${celdas(f)}</tr>`).join('')}</tbody>
+      <tfoot><tr><td class="nom"></td><td class="nom">Total general</td>${celdas(tot)}</tr></tfoot>
     </table></div>`;
   return card;
 }
