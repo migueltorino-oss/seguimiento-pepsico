@@ -386,6 +386,13 @@ tbody tr.subt:hover td { background: var(--page); }
 .av-tabla td.av-grupo { padding-left: 26px; color: var(--ink2); }
 .av-tabla tbody tr.av-subt td { font-weight: 650; background: var(--page); border-top: 1px solid var(--border); }
 .av-tabla .btn { margin-top: 4px; }
+/* solapas de tabla ancha (Avance KG y Compromisos): la página usa todo el ancho de la pantalla y la
+   tabla se compacta (títulos en dos líneas) para verse entera sin correr hacia la derecha — se
+   proyecta directo desde el tablero (pedido del usuario 2026-09-25) */
+body.ancho .wrap { max-width: 1680px; }
+.av-tabla thead th { white-space: normal; line-height: 1.25; vertical-align: bottom; }
+.av-tabla th, .av-tabla td { padding-left: 6px; padding-right: 6px; }
+.av-tabla thead tr th:not(.nom) { min-width: 62px; }
 .comp-ico { display: inline-block; margin-right: 6px; font-size: 13px; cursor: help; }
 
 footer.nota { margin-top: 22px; font-size: 12.5px; color: var(--muted); max-width: 72ch; }
@@ -3805,6 +3812,7 @@ function render() {
   // la semana del ciclo real se resuelve UNA vez por render, antes que nada: statsVend, objetivos,
   // cliPasa (via diasCli, cuya cache se invalida sola al cambiar LUNES_SEL) y los conteos de las pills dependen de ella
   LUNES_SEL = lunesSel();
+  document.body.classList.toggle('ancho', tabSel === 'avancekg' || tabSel === 'comp');
   renderFiltros();
   pillGroup($('pillsTab'), TABS, t => t.id === tabSel, t => t.label, t => { tabSel = t.id; render(); });
   OBJ = calcObjetivos();
