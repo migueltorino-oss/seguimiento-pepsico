@@ -2102,22 +2102,38 @@ function cardFrescEquipo(eq) {
     const cel = arts.map(a => ({ c: frCuotaVend(a, eq.sup, v.cod), v: frVendido(v.cod, a.codigo) }));
     return { cod: v.cod, nombre: v.nombre, cel, c: cel.reduce((s, x) => s + x.c, 0), v: cel.reduce((s, x) => s + x.v, 0) };
   });
-  const tds = f => f.cel.map(x => `<td>${fmt(x.v)}</td><td>${x.c > 0 ? pill(pct(x.v, x.c), UMBRAL_AVANCE) : '—'}</td>`).join('')
-    + `<td style="border-left:2px solid var(--border)">${fmt(f.c)}</td><td><b>${fmt(f.v)}</b></td><td>${f.c > 0 ? pill(pct(f.v, f.c), UMBRAL_AVANCE) : '—'}</td><td>${fmt(Math.max(0, f.c - f.v))}</td>`;
+  // por artículo: cuota de la vendedora · vendido · % (pedido del usuario 2026-10-02: la cuota de cada
+  // artículo tiene que verse en la tabla, no solo el total); columnas agrupadas bajo el nombre del artículo
+  const pc = x => x.c > 0 ? pill(pct(x.v, x.c), UMBRAL_AVANCE) : '—';
+  const tds = f => f.cel.map((x, k) => `<td${k ? ' class="gtot"' : ''}>${fmt(x.c)}</td><td>${fmt(x.v)}</td><td>${pc(x)}</td>`).join('')
+    + `<td class="gtot">${fmt(f.c)}</td><td><b>${fmt(f.v)}</b></td><td>${pc(f)}</td><td>${fmt(Math.max(0, f.c - f.v))}</td>`;
   const cuotaEq = arts.reduce((s, a) => s + frCuotaEq(a, eq), 0);
   const tot = {
     cel: arts.map((a, k) => ({ c: frCuotaEq(a, eq), v: filas.reduce((s, f) => s + f.cel[k].v, 0) })),
     c: cuotaEq, v: filas.reduce((s, f) => s + f.v, 0),
   };
   filas.sort((x, y) => pct(y.v, y.c) - pct(x.v, x.c));
-  return cardTabla({
-    rol: 'Frescura Pepsico · por vendedora', sup: eq.sup,
-    resumen: `<b>${fmt(tot.v)}</b> vendidas de <b>${fmt(cuotaEq)}</b> · ${cuotaEq > 0 ? pill(pct(tot.v, cuotaEq), UMBRAL_AVANCE) : '—'}`,
-    hint: `Cuota por vendedora = cantidad del equipo ÷ ${D.equipos.find(e => e.sup === eq.sup).vends.length} vendedoras, en partes iguales y redondeada artículo por artículo (${arts.map(a => esc(frCorto(a.descripcion)) + ' ' + fmt(frCuotaVend(a, eq.sup, D.equipos.find(e => e.sup === eq.sup).vends[0].cod)) + ' c/u').join(' · ')}). El total del equipo es la cantidad asignada.`,
-    ths: arts.map(a => `<th>${esc(frCorto(a.descripcion))}<br>vendido</th><th>%</th>`).join('') + '<th style="border-left:2px solid var(--border)">Cuota</th><th>Vendido</th><th>%</th><th>Falta</th>',
-    filas: filas.map(f => ({ ...f, tds: tds(f) })),
-    totTds: tds(tot),
-  });
+  const nEq = D.equipos.find(e => e.sup === eq.sup).vends.length;
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="card-head">
+      <span class="rol">Frescura Pepsico · por vendedora</span>
+      <h2>${medallon(eq.sup)}${esc(eq.sup)}</h2>
+      <span class="resumen"><b>${fmt(tot.v)}</b> vendidas de <b>${fmt(cuotaEq)}</b> · ${pc(tot)}</span>
+      <span class="cobm-sub">Cuota por vendedora = cantidad del equipo ÷ ${nEq} vendedoras, en partes iguales y redondeada artículo por artículo. En la fila del equipo, la cuota es la cantidad asignada.</span>
+    </div>
+    <div class="tbl-scroll"><table class="fdtax-tabla comp-tabla" style="min-width:0">
+      <thead>
+        <tr><th class="nom" rowspan="2">Vendedor</th>
+          ${arts.map((a, k) => `<th class="grupo${k ? ' gtot' : ''}" colspan="3">${esc(frCorto(a.descripcion))}</th>`).join('')}
+          <th class="grupo gtot" colspan="4">Total</th></tr>
+        <tr>${arts.map((_, k) => `<th${k ? ' class="gtot"' : ''}>Cuota</th><th>Vendido</th><th>%</th>`).join('')}<th class="gtot">Cuota</th><th>Vendido</th><th>%</th><th>Falta</th></tr>
+      </thead>
+      <tbody>${filas.map(f => `<tr><td class="nom"><span class="cod">${esc(f.cod)}</span> ${esc(titulo(f.nombre))}</td>${tds(f)}</tr>`).join('')}</tbody>
+      <tfoot><tr><td class="nom">Total equipo</td>${tds(tot)}</tr></tfoot>
+    </table></div>`;
+  return card;
 }
 
 // --- Combo adicional (pedido del usuario 2026-09-21) ---
