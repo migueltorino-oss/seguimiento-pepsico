@@ -401,8 +401,8 @@ body.ancho .wrap { max-width: 1680px; }
 .av-tabla tbody tr.av-gtot td { font-weight: 650; background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
 .av-tabla tbody tr.av-gtot-fin td { background: color-mix(in srgb, var(--accent) 13%, var(--card)); border-bottom: 2px solid var(--accent); }
 .av-tabla thead th { white-space: normal; line-height: 1.25; vertical-align: bottom; }
-.av-tabla th, .av-tabla td { padding-left: 6px; padding-right: 6px; }
-.av-tabla thead tr th:not(.nom) { min-width: 62px; }
+.av-tabla th, .av-tabla td { padding-left: 5px; padding-right: 5px; }
+.av-tabla thead tr th:not(.nom) { min-width: 56px; }
 .comp-ico { display: inline-block; margin-right: 6px; font-size: 13px; cursor: help; }
 /* corrección del compromiso del día desde el tablero (2026-10-05) */
 .av-lapiz {
@@ -2607,7 +2607,7 @@ function avAbrirEditor(tr, mes, vend, fs) {
   const nombre = titulo(fs[0][AVC.vnom] || '');
   const ed = document.createElement('tr');
   ed.className = 'av-edit';
-  ed.innerHTML = `<td colspan="12"><form class="av-edit-form">
+  ed.innerHTML = `<td colspan="13"><form class="av-edit-form">
     <b>Corregir compromiso del ${esc(fmtFecha(avCorte(mes)))} · ${esc(vend)} ${esc(nombre)}</b>
     <label>Platino + Gold <input type="number" name="gp" min="0" step="0.01" inputmode="decimal" value="${val('GP')}"> kg</label>
     <label>Silver &amp; Bronze <input type="number" name="sb" min="0" step="0.01" inputmode="decimal" value="${val('SB')}"> kg</label>
@@ -2654,6 +2654,8 @@ function avTot(filas) {
 // ni el % de avance ni el del compromiso se suman: se recalculan sobre los totales de la fila
 // (tendencia / objetivo, como la fila final del Excel; real del día / compromiso del día)
 const avPct = t => pct(t.tend, t.obj);
+// % Avance real = venta acumulada / objetivo (pedido del usuario 2026-10-07; sin semáforo: a mitad de mes siempre queda corto)
+const avPctReal = t => pct(t.acum, t.obj);
 const avPctComp = t => pct(t.real, t.comp);
 // una fila cruda (vendedor x grupo) con la misma forma que devuelve avTot, para reusar avTds y el export
 const avFilaObj = f => ({
@@ -2662,11 +2664,12 @@ const avFilaObj = f => ({
   fuente: f[AVC.fuente] || '',
 });
 const avTds = t => `<td>${fmt(t.obj)}</td><td><b>${fmt(t.acum)}</b></td><td>${fmt(t.tend)}</td>
+  <td>${t.obj > 0 ? fmtPct(avPctReal(t)) : '—'}</td>
   <td>${t.obj > 0 ? pill(avPct(t), UMBRAL_AVANCE_KG) : '—'}</td>
   <td>${fmtDec(t.prom)}</td><td>${fmtDec(t.media)}</td><td>${fmtDec(t.ult)}</td><td>${fmtDec(t.penult)}</td>
   <td>${icoFuente(t.fuente)}${fmtDec(t.comp)}</td><td><b>${fmtDec(t.real)}</b></td>
   <td>${t.comp > 0 ? pill(avPctComp(t), UMBRAL_COMP_DIA) : '—'}</td>`;
-const AV_THS = `<th>Objetivo</th><th>Venta acumulada</th><th>Tendencia</th><th>% Avance tendencia</th><th>Promedio</th><th>Media necesaria</th><th>Última visita</th><th>Penúltima visita</th><th>Compromiso del día</th><th>Real del día</th><th>% Compromiso vs real</th>`;
+const AV_THS = `<th>Objetivo</th><th>Venta acumulada</th><th>Tendencia</th><th>% Avance</th><th>% Avance tendencia</th><th>Promedio</th><th>Media necesaria</th><th>Última visita</th><th>Penúltima visita</th><th>Compromiso del día</th><th>Real del día</th><th>% Compromiso vs real</th>`;
 // dd/mm de la visita de hace n días respecto de la fecha de corte del mes
 const DIA_SEM = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 function cardAvanceKg(mes) {
@@ -2727,7 +2730,8 @@ function cardAvanceKg(mes) {
         el resto lo calcula el tablero con datos propios, en <b>kilos netos FAC−NCR según fecha de entrega</b>.
         <b>Días hábiles ${fmt(dias.diasHabiles)} · trabajados ${fmt(dias.diasTrabajados)}</b>
         (lunes a viernes del mes, y del 1 hasta ${esc((dias.corte || '').split('-').reverse().join('/'))}: se recalculan en cada corrida).
-        <b>Tendencia</b> = acumulado ÷ días trabajados × días hábiles y <b>% Avance</b> = tendencia / objetivo (verde al llegar al objetivo).
+        <b>% Avance</b> = venta acumulada / objetivo (lo logrado hasta hoy).
+        <b>Tendencia</b> = acumulado ÷ días trabajados × días hábiles y <b>% Avance tendencia</b> = tendencia / objetivo (verde al llegar al objetivo).
         <b>Media necesaria</b> = lo que hay que vender por día para llegar.
         <b>Última y penúltima visita</b> = los kilos <b>cargados 7 y 14 días antes</b> de la fecha de corte, que es el ciclo semanal de la
         ruta (con corte ${esc(diaCorte)} ${esc((dias.corte || '').split('-').reverse().join('/'))}, son el ${esc(avFechaVisita(7))} y el ${esc(avFechaVisita(14))}).
@@ -2746,15 +2750,16 @@ function cardAvanceKg(mes) {
     </div>
     <div class="tbl-scroll"><table class="av-tabla">
       <thead><tr><th class="nom">Vendedor · grupo</th>${AV_THS}</tr></thead>
-      <tbody>${trsTot}${trs || `<tr><td class="nom" colspan="12"><div class="bt-vacio">Ningún vendedor coincide con los filtros elegidos.</div></td></tr>`}</tbody>
+      <tbody>${trsTot}${trs || `<tr><td class="nom" colspan="13"><div class="bt-vacio">Ningún vendedor coincide con los filtros elegidos.</div></td></tr>`}</tbody>
     </table></div>
     <div class="bt-tools"><button class="btn av-xls" type="button">⬇ Excel</button><button class="btn av-pdf" type="button">🖨 PDF</button></div>`;
   // export con la misma forma que la tabla (grupos + subtotal por vendedor + total general)
-  const COLS_X = ['Vendedor', 'Grupo', 'Objetivo', 'Venta acumulada', 'Tendencia', '% Avance tendencia',
+  const COLS_X = ['Vendedor', 'Grupo', 'Objetivo', 'Venta acumulada', 'Tendencia', '% Avance', '% Avance tendencia',
     'Promedio', 'Media necesaria', 'Ultima visita', 'Penultima visita',
     'Compromiso del dia', 'Real del dia', '% Compromiso vs real', 'Origen del compromiso'];
-  const ANCHOS_X = [26, 26, 14, 15, 14, 12, 11, 13, 12, 13, 15, 12, 14, 24];
+  const ANCHOS_X = [26, 26, 14, 15, 14, 11, 12, 11, 13, 12, 13, 15, 12, 14, 24];
   const filaX = (vend, grupo, x) => [vend, grupo, Math.round(x.obj), Math.round(x.acum), Math.round(x.tend),
+    x.obj > 0 ? Math.round(avPctReal(x) * 100) / 100 : '',
     x.obj > 0 ? Math.round(avPct(x) * 100) / 100 : '', redondeo2(x.prom), redondeo2(x.media), redondeo2(x.ult), redondeo2(x.penult),
     redondeo2(x.comp), redondeo2(x.real), x.comp > 0 ? Math.round(avPctComp(x) * 100) / 100 : '',
     COMP_FUENTE_LBL[x.fuente] || ''];
@@ -2796,7 +2801,7 @@ function cardAvanceKg(mes) {
         + ' · Datos al ' + D.ultimaFecha.split('-').reverse().join('/'),
       cols: COLS_X.map((l, i) => ({ lbl: l, w: ANCHOS_X[i], der: i >= 2 })),
       filas: filasX().map(f => f.map((x, i) => typeof x === 'number'
-        ? (i === 5 || i === 12 ? fmtPct(x) : (i >= 6 ? fmtDec(x) : fmt(x))) : String(x))),
+        ? (i === 5 || i === 6 || i === 13 ? fmtPct(x) : (i >= 7 ? fmtDec(x) : fmt(x))) : String(x))),
     });
     descargarArchivo(`avance-kg-${mes}-${new Date().toISOString().slice(0, 10)}.pdf`, bytes, 'application/pdf');
   };
@@ -2807,7 +2812,7 @@ function cardAvanceKg(mes) {
   if (modoLapiz && !AV_RO && dias.corte === AV.fecha && (modoLapiz === 'db' || AV.fecha === hoyISO())) {
     card.querySelectorAll('tr.av-subt[data-v]').forEach(tr => {
       const v = tr.dataset.v;
-      const td = tr.children[9];
+      const td = tr.children[10];
       if (!td) return;
       const b = document.createElement('button');
       b.type = 'button';
