@@ -689,19 +689,19 @@ const orden = {};        // orden.ccc = [columna, direccion] de la tabla general
 
 // solapas del tablero
 const TABS = [
-  { id: 'ccc', label: 'CCC, Mi Negocio y Fully Digital' },
-  { id: 'tp', label: 'Tienda Perfecta' },
-  { id: 'rech', label: 'Rechazos' },
-  { id: 'inv', label: 'Invendibles' },
-  { id: 'combos', label: 'Combos' },
-  { id: 'comboad', label: 'Combo adicional' },
   { id: 'avancekg', label: 'Avance KG' },
+  { id: 'ccc', label: 'CCC, Mi Negocio y Fully Digital' },
   { id: 'comp', label: 'Compromisos CCC · FD · TP' },
   { id: 'marcas', label: 'Coberturas de marcas' },
-  { id: 'visitas', label: 'No venta y efectividad' },
+  { id: 'rech', label: 'Rechazos' },
+  { id: 'inv', label: 'Invendibles' },
+  { id: 'tp', label: 'Tienda Perfecta' },
+  { id: 'combos', label: 'Combos' },
   { id: 'fresc', label: 'Frescura' },
+  { id: 'comboad', label: 'Combo adicional' },
+  { id: 'visitas', label: 'No venta y efectividad' },
 ];
-let tabSel = 'ccc';
+let tabSel = 'avancekg'; // abre en la primera solapa (orden pedido por el usuario 2026-10-07)
 
 // filtro por atributos del cliente (taxonomia + sub ramo)
 const cliFiltroActivo = () => taxSels.size > 0 || subSel !== '';
