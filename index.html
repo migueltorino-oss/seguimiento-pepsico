@@ -1435,15 +1435,14 @@ function renderKpis() {
     <div class="kpi destacado"><div class="klabel">Cobertura</div><div class="kval">${fmtPct(cob)}</div><div class="ksub">CCC + Pendiente / universo</div></div>
     <div class="kpi"><div class="klabel">Venta total</div><div class="kval">${fmtM(ventaTotal)}</div><div class="ksub">Pepsico neta s/IVA, todos los canales, clientes de la selección</div></div>
     <div class="kpi"><div class="klabel">Venta Mi Negocio</div><div class="kval">${fmtM(mnNeto)}</div><div class="ksub">${fmt(mnUnid)} unidades netas por la app</div></div>
-    <div class="kpi"><div class="klabel">% Venta MN / total</div><div class="kval">${ventaTotal > 0 ? fmtPct(pct(mnNeto, ventaTotal)) : '—'}</div><div class="ksub">participación de la app en la venta</div></div>
-    ${(() => { // objetivo de % venta por Mi Negocio (pedido del usuario 2026-10-12): "mn" por mes en seguimiento_objetivos.json
+    ${(() => { // % venta MN con su objetivo al lado (pedido del usuario 2026-10-12): "mn" por mes en seguimiento_objetivos.json
       const conMn = mesesSel().filter(m => (D.objetivos[m] || {}).mn);
-      if (!conMn.length) return '';
-      const mes = conMn[conMn.length - 1], o = D.objetivos[mes].mn;
-      if (!(ventaTotal > 0)) return `<div class="kpi"><div class="klabel">Objetivo % venta MN · ${D.labels[mes].split(' ')[0]}</div><div class="kval">${fmtPct(o)}</div><div class="ksub">sin venta en la selección</div></div>`;
-      const p = pct(mnNeto, ventaTotal), dif = p - o;
-      const cls = p >= o ? 'p-ok' : (p >= o - 5 ? 'p-warn' : 'p-bad');
-      return `<div class="kpi"><div class="klabel">Objetivo % venta MN · ${D.labels[mes].split(' ')[0]}</div><div class="kval">${fmtPct(o)}</div><div class="ksub">actual <span class="pill ${cls}">${fmtPct(p)}</span> · ${dif >= 0 ? '+' : '−'}${Math.abs(dif).toFixed(1).replace('.', ',')} pp ${dif >= 0 ? 'sobre el objetivo' : 'para el objetivo'}</div></div>`;
+      const p = ventaTotal > 0 ? pct(mnNeto, ventaTotal) : null;
+      if (!conMn.length) return `<div class="kpi"><div class="klabel">% Venta MN / total</div><div class="kval">${p !== null ? fmtPct(p) : '—'}</div><div class="ksub">participación de la app en la venta</div></div>`;
+      const o = D.objetivos[conMn[conMn.length - 1]].mn;
+      if (p === null) return `<div class="kpi"><div class="klabel">% Venta MN / total</div><div class="kval">—</div><div class="ksub">objetivo ${fmtPct(o)}</div></div>`;
+      const dif = p - o, cls = p >= o ? 'p-ok' : (p >= o - 5 ? 'p-warn' : 'p-bad');
+      return `<div class="kpi"><div class="klabel">% Venta MN / total</div><div class="kval"><span class="rechbig ${cls}">${fmtPct(p)}</span></div><div class="ksub">objetivo <b>${fmtPct(o)}</b> · ${dif >= 0 ? '+' : '−'}${Math.abs(dif).toFixed(1).replace('.', ',')} pp ${dif >= 0 ? 'sobre el objetivo' : 'para llegar'}</div></div>`;
     })()}
     ${kpisFD(eqs, `<div class="klabel">Fully Digital</div><div class="kval">${fmt(fd)}</div><div class="ksub">≥${FD_PCT}% del monto por Mi Negocio · activos MN: ${fmt(act)}</div>`)}`;
     return;
