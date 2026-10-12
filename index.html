@@ -371,6 +371,13 @@ tbody tr.subt:hover td { background: var(--page); }
 .fdtax-tabla td.fdfalta { color: var(--bad); font-weight: 650; }
 .fdtax-tabla td.fdok { color: var(--good); font-weight: 650; }
 @media (max-width: 780px) { .bt-tabla td.nom, .bt-tabla td.dir { max-width: 130px; } }
+/* batalla del incentivo ATR: 11 columnas → títulos en dos líneas y nombre/dirección más angostos,
+   para que entre entera a 1280 px sin scroll lateral (el tablero se proyecta) */
+.atr-bt thead th { white-space: normal; line-height: 1.25; vertical-align: bottom; }
+.atr-bt th, .atr-bt td { padding-left: 6px; padding-right: 6px; }
+.atr-bt td.nom { max-width: 170px; }
+.atr-bt td.dir { max-width: 170px; }
+.atr-bt td:first-child { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 
 /* Compromisos CCC · FD · TP: 16 columnas → ancho automático, encabezados en dos líneas y scroll
    lateral en pantallas angostas, así ningún título se pisa con el de al lado */
@@ -3336,6 +3343,170 @@ function cardATR(eqs, mes) {
   return card;
 }
 
+// batalla del incentivo ATR (pedido del usuario 2026-10-12): un renglón por cliente de la cartera de
+// los vendedores con objetivo ATR, con lo que le falta para cada objetivo — D Fully Digital (solo los
+// taxonomía D, con el $ que falta cargar por la app), cobertura PH MB y de cada innovación (unidades
+// netas del mes contra el mínimo) y visitas programadas sin compra (frecuencia). Mismos filtros de arriba.
+let atrEstado = 'falta', atrQ = '', atrOrd = ['faltan', -1], atrTodos = false;
+function filasATR(eqs, mes) {
+  const cfg = D.objetivos[mes].atr, ng = D.atrGrupos[mes].length, minU = cfg.minU || 3;
+  const out = [];
+  for (const eq of eqs) for (const v of eq.vends) {
+    if (!cfg.vend[v.cod]) continue;
+    for (const i of baseVend(v.cod)) {
+      const c = D.clis[i] || ['?', '?', ''];
+      const tax = D.taxo[i] || '—', esD = tax === 'D';
+      const mn = mnDe(i)[0], tot = totNetoCli(i), fd = esFD(i);
+      const a = (D.atrU[mes] || {})[i] || [];
+      const u = Array.from({ length: ng }, (_, k) => a[k] || 0);
+      const e = (D.efe[mes] || {})[i] || [0, 0];
+      const r = {
+        vcod: v.cod, vnom: titulo(v.nombre), cod: c[0], nom: titulo(c[1] || ''), dir: titulo(c[2] || ''),
+        tax, esD, fd, tot, falta: esD && !fd ? faltaFD(mn, tot) : 0,
+        u, cub: u.map(x => x >= minU), prog: e[0], efp: e[1],
+      };
+      r.pendD = esD && !fd;
+      r.pendG = r.cub.map(x => !x);
+      r.pendFr = r.prog > r.efp;
+      r.faltan = (r.pendD ? 1 : 0) + r.pendG.filter(Boolean).length + (r.pendFr ? 1 : 0);
+      out.push(r);
+    }
+  }
+  return out;
+}
+function cardATRBatalla(eqs, mes) {
+  const cfg = D.objetivos[mes].atr, grupos = D.atrGrupos[mes], minU = cfg.minU || 3;
+  const estados = [
+    { id: 'falta', lbl: 'Le falta algo', ok: r => r.faltan > 0 },
+    { id: 'd', lbl: 'D sin Fully Digital', ok: r => r.pendD },
+    ...grupos.map((g, k) => ({ id: 'g' + k, lbl: 'Sin ' + g, ok: r => r.pendG[k] })),
+    { id: 'fr', lbl: 'Visitas sin compra', ok: r => r.pendFr },
+    { id: 'ok', lbl: 'Cumple todo', ok: r => r.faltan === 0 },
+    { id: 'todos', lbl: 'Todos', ok: () => true },
+  ];
+  const celU = k => r => r.cub[k] ? `<span class="si">✓</span> <span class="cod">${fmt(r.u[k])} u.</span>`
+    : `<span class="si-bad">✕</span> <span class="cod">${r.u[k] > 0 ? fmt(r.u[k]) + ' u., ' : ''}falta ${fmt(minU - Math.max(0, r.u[k]))} u.</span>`;
+  const xlsU = k => r => r.cub[k] ? 'Si (' + fmt(r.u[k]) + ' u.)' : 'No (' + fmt(r.u[k]) + ' u., faltan ' + fmt(minU - Math.max(0, r.u[k])) + ')';
+  const cols = [
+    { k: 'vend', lbl: 'Vendedor', cls: 'nom', w: 20, val: r => +r.vcod, xls: r => r.vcod + ' - ' + r.vnom, td: r => `<span class="cod">${esc(r.vcod)}</span> ${esc(r.vnom)}` },
+    { k: 'cod', lbl: 'Cliente', w: 9, val: r => +r.cod || 0, xls: r => r.cod, td: r => `<span class="cod">${esc(r.cod)}</span>` },
+    { k: 'nom', lbl: 'Razón social', cls: 'nom', w: 26, val: r => r.nom, xls: r => r.nom, td: r => esc(r.nom) },
+    { k: 'dir', lbl: 'Dirección', cls: 'dir', w: 26, val: r => r.dir, xls: r => r.dir, td: r => esc(r.dir) },
+    { k: 'tax', lbl: 'Taxo.', w: 6, val: r => r.tax, xls: r => r.tax, td: r => esc(r.tax) },
+    { k: 'faltan', lbl: 'Le faltan', w: 9, der: 1, val: r => r.faltan, xls: r => r.faltan, td: r => r.faltan ? `<b>${fmt(r.faltan)}</b>` : '<span class="si">✓</span>' },
+    {
+      k: 'd', lbl: 'D Fully Digital', w: 20, val: r => (r.esD ? 1 : 0) * 1e12 + (r.pendD ? r.falta : -1),
+      xls: r => !r.esD ? '-' : (r.fd ? 'Si' : 'No, falta ' + (r.tot > 0 ? fmtM(r.falta) : 'cualquier pedido') + ' por la app'),
+      td: r => !r.esD ? '<span class="no">—</span>' : (r.fd ? '<span class="si">✓ FD</span>'
+        : `<span class="si-bad">✕</span> ${r.tot > 0 ? `<span class="cod">falta</span> <b>${fmtM(r.falta)}</b>` : '<span class="cod">sin compra</span>'}`),
+    },
+    ...grupos.map((g, k) => ({ k: 'g' + k, lbl: g, w: 15, val: r => r.u[k], xls: xlsU(k), td: celU(k) })),
+    {
+      k: 'fr', lbl: 'Visitas c/ compra', w: 13, der: 1, val: r => (r.prog ? r.efp / r.prog : 2),
+      xls: r => r.prog ? r.efp + ' de ' + r.prog : '-',
+      td: r => !r.prog ? '<span class="no">—</span>' : `<span class="${r.pendFr ? 'si-bad' : 'si'}">${fmt(r.efp)} de ${fmt(r.prog)}</span>`,
+    },
+  ];
+  const card = document.createElement('div');
+  card.className = 'card batalla';
+  const todas = filasATR(eqs, mes);
+  card.innerHTML = `
+    <div class="card-head">
+      <span class="rol">Batalla del incentivo ATR · ${esc(D.labels[mes] || mes)} — qué le falta a cada cliente</span>
+      <h2>${medallon('Batalla')}Clientes por objetivo</h2>
+      <span class="cobm-sub">Un renglón por cliente de la cartera, con <b>los mismos filtros de arriba</b>. Por objetivo:
+        <b>D Fully Digital</b> (solo taxonomía D: el importe que falta cargar por la app de Mi Negocio para llegar al ${fmt(FD_PCT)}%),
+        <b>cobertura</b> de ${grupos.map(esc).join(', ')} (${minU} unidades netas o más en el mes: cuántas faltan) y
+        <b>visitas con compra</b> sobre las programadas (frecuencia). "Le faltan" = cuántos objetivos tiene pendientes el cliente.
+        Arranca en <b>Le falta algo</b>; las pills filtran por objetivo. Clic en el encabezado para ordenar; se exporta a Excel y a PDF.</span>
+    </div>
+    <div class="bt-tools">
+      <div class="pills atr-pills"></div>
+      <input class="det-buscar atr-q" type="search" placeholder="Buscar cliente, código o dirección…" aria-label="Buscar cliente en la batalla ATR">
+      <button class="btn atr-xls" type="button">⬇ Excel</button>
+      <button class="btn atr-pdf" type="button">🖨 PDF</button>
+    </div>
+    <div class="bt-resumen"></div>
+    <div class="tbl-scroll"><table class="bt-tabla atr-bt"><thead></thead><tbody></tbody></table></div>
+    <div class="bt-mas"></div>`;
+  const $$ = s => card.querySelector(s);
+  const inputQ = $$('.atr-q');
+  inputQ.value = atrQ;
+  let vis = [];
+  const estadoAct = () => estados.find(x => x.id === atrEstado) || estados[0];
+  const filtrar = () => {
+    const e = estadoAct();
+    const q = atrQ.trim().toLowerCase();
+    const arr = todas.filter(r => e.ok(r) && (!q || (r.cod + ' ' + r.nom + ' ' + r.dir + ' ' + r.vnom).toLowerCase().includes(q)));
+    const col = cols.find(c => c.k === atrOrd[0]) || cols[0];
+    return arr.sort((a, b) => {
+      const x = col.val(a), y = col.val(b);
+      const c = typeof x === 'string' ? x.localeCompare(y) : (x - y);
+      return atrOrd[1] * c || (+a.vcod - +b.vcod) || a.nom.localeCompare(b.nom);
+    });
+  };
+  const pinta = () => {
+    vis = filtrar();
+    pillGroup($$('.atr-pills'), estados, e => e.id === atrEstado, e => ({ html: `${esc(e.lbl)}<span class="cnt">${fmt(todas.filter(e.ok).length)}</span>` }), e => { atrEstado = e.id; atrTodos = false; pinta(); });
+    $$('thead').innerHTML = `<tr>${cols.map(c => `<th class="sortable ${c.cls || ''}" tabindex="0" role="button" data-k="${c.k}"
+      aria-sort="${atrOrd[0] === c.k ? (atrOrd[1] === 1 ? 'ascending' : 'descending') : 'none'}">${esc(c.lbl)} <span class="arrow">${atrOrd[0] === c.k ? (atrOrd[1] === 1 ? '▲' : '▼') : ''}</span></th>`).join('')}</tr>`;
+    const tope = atrTodos ? vis.length : Math.min(vis.length, BT_TOPE);
+    $$('tbody').innerHTML = vis.slice(0, tope).map(r =>
+      `<tr>${cols.map(c => `<td class="${c.cls || ''}">${c.td(r)}</td>`).join('')}</tr>`).join('')
+      || `<tr><td class="nom" colspan="${cols.length}"><div class="bt-vacio">Ningún cliente coincide con los filtros elegidos.</div></td></tr>`;
+    const dPend = todas.filter(r => r.pendD);
+    $$('.bt-resumen').innerHTML = `<b>${fmt(vis.length)}</b> clientes en la vista de <b>${fmt(todas.length)}</b> en cartera ·
+      D sin Fully Digital <b>${fmt(dPend.length)}</b> (${fmtM(dPend.filter(r => r.tot > 0).reduce((a, r) => a + r.falta, 0))} por la app en los que ya compran) ·
+      ${grupos.map((g, k) => `sin ${esc(g)} <b>${fmt(todas.filter(r => r.pendG[k]).length)}</b>`).join(' · ')} ·
+      con visitas sin compra <b>${fmt(todas.filter(r => r.pendFr).length)}</b> · cumplen todo <b>${fmt(todas.filter(r => !r.faltan).length)}</b>.`;
+    $$('.bt-mas').innerHTML = vis.length > tope
+      ? `<button class="masmas" type="button">Mostrar los ${fmt(vis.length)} clientes (se ven ${fmt(tope)})</button>` : '';
+    const mas = $$('.bt-mas button');
+    if (mas) mas.onclick = () => { atrTodos = true; pinta(); };
+    card.querySelectorAll('thead th').forEach(th => {
+      const act = () => {
+        const k = th.dataset.k;
+        atrOrd = [k, atrOrd[0] === k ? -atrOrd[1] : (['nom', 'dir', 'tax', 'vend', 'cod'].includes(k) ? 1 : -1)];
+        pinta();
+      };
+      th.onclick = act;
+      th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } };
+    });
+  };
+  inputQ.addEventListener('input', () => { atrQ = inputQ.value; atrTodos = false; pinta(); });
+  const encab = () => descFiltros().filter(([k]) => k !== 'Estado' && k !== 'Búsqueda');
+  $$('.atr-xls').onclick = () => {
+    const rows = [
+      ['INCENTIVO ATR ' + (D.labels[mes] || mes) + ' — batalla por cliente — Seguimiento Pepsico'],
+      ...encab().map(([k, v]) => [k, v]),
+      ['Vista', estadoAct().lbl],
+      ...(atrQ ? [['Búsqueda', atrQ]] : []),
+      ['Datos al', D.ultimaFecha.split('-').reverse().join('/')],
+      ['Criterio', 'D Fully Digital = Mi Negocio >= ' + FD_PCT + '% del neto (solo taxonomia D). Cobertura = ' + minU + ' unidades netas o mas en el mes. Visitas c/ compra = visitas programadas con compra / programadas.'],
+      [],
+      cols.map(c => c.lbl),
+      ...vis.map(r => cols.map(c => c.xls(r))),
+    ];
+    const hoy = new Date().toISOString().slice(0, 10);
+    descargarArchivo(`batalla-atr-${hoy}.xlsx`, buildXlsx([{ name: 'Batalla ATR', rows, widths: cols.map(c => c.w) }]),
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  };
+  $$('.atr-pdf').onclick = () => {
+    const sub = encab().map(([k, v]) => k + ': ' + v).join(' · ') + ' · Vista: ' + estadoAct().lbl
+      + (atrQ ? ' · Búsqueda: ' + atrQ : '') + ' · Datos al ' + D.ultimaFecha.split('-').reverse().join('/');
+    const bytes = buildPdf({
+      titulo: 'Incentivo ATR ' + (D.labels[mes] || mes) + ' — qué le falta a cada cliente',
+      sub,
+      cols: cols.map(c => ({ lbl: c.lbl, w: c.w, der: !!c.der })),
+      filas: vis.map(r => cols.map(c => String(c.xls(r)))),
+    });
+    const hoy = new Date().toISOString().slice(0, 10);
+    descargarArchivo(`batalla-atr-${hoy}.pdf`, bytes, 'application/pdf');
+  };
+  pinta();
+  return card;
+}
+
 function renderEquipos() {
   const cont = $('equipos');
   cont.innerHTML = '';
@@ -3398,6 +3569,7 @@ function renderEquipos() {
     const mes = atrMes();
     if (!mes) { cont.innerHTML = '<div class="card"><div class="vacio">El mes elegido no tiene objetivo del incentivo ATR cargado.</div></div>'; return; }
     cont.appendChild(cardATR(eqs, mes));
+    cont.appendChild(cardATRBatalla(eqs, mes));
     return;
   }
   if (tabSel === 'comp') {
