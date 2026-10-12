@@ -378,6 +378,10 @@ tbody tr.subt:hover td { background: var(--page); }
 .atr-bt td.nom { max-width: 170px; }
 .atr-bt td.dir { max-width: 170px; }
 .atr-bt td:first-child { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+/* batalla de coberturas: 15 columnas (una por marca) → nombre y dirección todavía más angostos */
+.cb-bt td.nom { max-width: 150px; }
+.cb-bt td.dir { max-width: 140px; }
+.cb-bt th, .cb-bt td { padding-left: 5px; padding-right: 5px; }
 
 /* Compromisos CCC · FD · TP: 16 columnas → ancho automático, encabezados en dos líneas y scroll
    lateral en pantallas angostas, así ningún título se pisa con el de al lado */
@@ -3518,6 +3522,7 @@ function renderEquipos() {
   if (tabSel === 'marcas') {
     cont.appendChild(cardCobGeneral(eqs));
     eqs.forEach(eq => cont.appendChild(cardCobMarcas(eq)));
+    cont.appendChild(cardCobBatalla(eqs));
     return;
   }
   if (tabSel === 'tp') {
@@ -4187,6 +4192,137 @@ function cardCobMarcas(eq) {
     td.addEventListener('click', () => toggleCobDet(td));
     td.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCobDet(td); } });
   });
+  return card;
+}
+// batalla de coberturas (pedido del usuario 2026-10-12): un renglón por cliente de la cartera con una
+// columna por marca — cubierto (≥3 u. netas en el mes) o cuántas unidades lleva — para ver qué
+// coberturas le faltan a cada uno. Mismos filtros de arriba y misma mecánica que la batalla ATR.
+let cbEstado = 'falta', cbQ = '', cbOrd = ['faltan', -1], cbTodos = false;
+function cardCobBatalla(eqs) {
+  const MARCAS = objetivosMarcas();
+  const todas = [];
+  for (const eq of eqs) for (const v of eq.vends) for (const i of baseVend(v.cod)) {
+    const c = D.clis[i] || ['?', '?', ''];
+    const u = MARCAS.map((_, b) => unidMarca(i, b)), cub = MARCAS.map((_, b) => cubiertoMarca(i, b));
+    todas.push({
+      vcod: v.cod, vnom: titulo(v.nombre), cod: c[0], nom: titulo(c[1] || ''), dir: titulo(c[2] || ''),
+      tax: D.taxo[i] || '—', u, cub, faltan: cub.filter(x => !x).length,
+    });
+  }
+  const estados = [
+    { id: 'falta', lbl: 'Le falta alguna', ok: r => r.faltan > 0 },
+    ...MARCAS.map(([m], b) => ({ id: 'm' + b, lbl: 'Sin ' + m, ok: r => !r.cub[b] })),
+    { id: 'ok', lbl: 'Todas cubiertas', ok: r => r.faltan === 0 },
+    { id: 'todos', lbl: 'Todos', ok: () => true },
+  ];
+  const cols = [
+    { k: 'vend', lbl: 'Vendedor', cls: 'nom', w: 20, val: r => +r.vcod, xls: r => r.vcod + ' - ' + r.vnom, td: r => `<span class="cod">${esc(r.vcod)}</span> ${esc(r.vnom)}` },
+    { k: 'cod', lbl: 'Cliente', w: 9, val: r => +r.cod || 0, xls: r => r.cod, td: r => `<span class="cod">${esc(r.cod)}</span>` },
+    { k: 'nom', lbl: 'Razón social', cls: 'nom', w: 26, val: r => r.nom, xls: r => r.nom, td: r => esc(r.nom) },
+    { k: 'dir', lbl: 'Dirección', cls: 'dir', w: 26, val: r => r.dir, xls: r => r.dir, td: r => esc(r.dir) },
+    { k: 'tax', lbl: 'Taxo.', w: 6, val: r => r.tax, xls: r => r.tax, td: r => esc(r.tax) },
+    { k: 'faltan', lbl: 'Le faltan', w: 8, der: 1, val: r => r.faltan, xls: r => r.faltan, td: r => r.faltan ? `<b>${fmt(r.faltan)}</b>` : '<span class="si">✓</span>' },
+    ...MARCAS.map(([m], b) => ({
+      k: 'm' + b, lbl: m, w: 9, der: 1, val: r => (r.cub[b] ? 1e6 : 0) + r.u[b],
+      xls: r => (r.cub[b] ? 'Si' : 'No') + ' (' + fmt(r.u[b]) + ' u.)',
+      td: r => r.cub[b] ? `<span class="si">✓</span> <span class="cod">${fmt(r.u[b])}</span>`
+        : `<span class="si-bad">✕</span>${r.u[b] !== 0 ? ` <span class="cod">${fmt(r.u[b])} u.</span>` : ''}`,
+    })),
+  ];
+  const card = document.createElement('div');
+  card.className = 'card batalla';
+  card.innerHTML = `
+    <div class="card-head">
+      <span class="rol">Batalla de coberturas — qué marca le falta a cada cliente</span>
+      <h2>${medallon('Batalla')}Clientes por marca</h2>
+      <span class="cobm-sub">Un renglón por cliente de la cartera, con <b>los mismos filtros de arriba</b>. En cada marca:
+        <span class="si">✓</span> cubierto (3 unidades netas o más en el mes; la cifra es lo que lleva) ·
+        <span class="si-bad">✕</span> le falta (si compró algo, cuántas unidades netas lleva).
+        "Le faltan" = cuántas marcas no tiene cubiertas. Arranca en <b>Le falta alguna</b>; las pills filtran por marca.
+        Clic en el encabezado para ordenar; se exporta a Excel y a PDF.</span>
+    </div>
+    <div class="bt-tools">
+      <div class="pills cb-pills"></div>
+      <input class="det-buscar cb-q" type="search" placeholder="Buscar cliente, código o dirección…" aria-label="Buscar cliente en la batalla de coberturas">
+      <button class="btn cb-xls" type="button">⬇ Excel</button>
+      <button class="btn cb-pdf" type="button">🖨 PDF</button>
+    </div>
+    <div class="bt-resumen"></div>
+    <div class="tbl-scroll"><table class="bt-tabla atr-bt cb-bt"><thead></thead><tbody></tbody></table></div>
+    <div class="bt-mas"></div>`;
+  const $$ = s => card.querySelector(s);
+  const inputQ = $$('.cb-q');
+  inputQ.value = cbQ;
+  let vis = [];
+  const estadoAct = () => estados.find(x => x.id === cbEstado) || estados[0];
+  const filtrar = () => {
+    const e = estadoAct();
+    const q = cbQ.trim().toLowerCase();
+    const arr = todas.filter(r => e.ok(r) && (!q || (r.cod + ' ' + r.nom + ' ' + r.dir + ' ' + r.vnom).toLowerCase().includes(q)));
+    const col = cols.find(c => c.k === cbOrd[0]) || cols[0];
+    return arr.sort((a, b) => {
+      const x = col.val(a), y = col.val(b);
+      const c = typeof x === 'string' ? x.localeCompare(y) : (x - y);
+      return cbOrd[1] * c || (+a.vcod - +b.vcod) || a.nom.localeCompare(b.nom);
+    });
+  };
+  const pinta = () => {
+    vis = filtrar();
+    pillGroup($$('.cb-pills'), estados, e => e.id === cbEstado, e => ({ html: `${esc(e.lbl)}<span class="cnt">${fmt(todas.filter(e.ok).length)}</span>` }), e => { cbEstado = e.id; cbTodos = false; pinta(); });
+    $$('thead').innerHTML = `<tr>${cols.map(c => `<th class="sortable ${c.cls || ''}" tabindex="0" role="button" data-k="${c.k}"
+      aria-sort="${cbOrd[0] === c.k ? (cbOrd[1] === 1 ? 'ascending' : 'descending') : 'none'}">${esc(c.lbl)} <span class="arrow">${cbOrd[0] === c.k ? (cbOrd[1] === 1 ? '▲' : '▼') : ''}</span></th>`).join('')}</tr>`;
+    const tope = cbTodos ? vis.length : Math.min(vis.length, BT_TOPE);
+    $$('tbody').innerHTML = vis.slice(0, tope).map(r =>
+      `<tr>${cols.map(c => `<td class="${c.cls || ''}">${c.td(r)}</td>`).join('')}</tr>`).join('')
+      || `<tr><td class="nom" colspan="${cols.length}"><div class="bt-vacio">Ningún cliente coincide con los filtros elegidos.</div></td></tr>`;
+    $$('.bt-resumen').innerHTML = `<b>${fmt(vis.length)}</b> clientes en la vista de <b>${fmt(todas.length)}</b> en cartera · sin cubrir:
+      ${MARCAS.map(([m], b) => `${esc(m)} <b>${fmt(todas.filter(r => !r.cub[b]).length)}</b>`).join(' · ')} ·
+      todas cubiertas <b>${fmt(todas.filter(r => !r.faltan).length)}</b>.`;
+    $$('.bt-mas').innerHTML = vis.length > tope
+      ? `<button class="masmas" type="button">Mostrar los ${fmt(vis.length)} clientes (se ven ${fmt(tope)})</button>` : '';
+    const mas = $$('.bt-mas button');
+    if (mas) mas.onclick = () => { cbTodos = true; pinta(); };
+    card.querySelectorAll('thead th').forEach(th => {
+      const act = () => {
+        const k = th.dataset.k;
+        cbOrd = [k, cbOrd[0] === k ? -cbOrd[1] : (['nom', 'dir', 'tax', 'vend', 'cod'].includes(k) ? 1 : -1)];
+        pinta();
+      };
+      th.onclick = act;
+      th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } };
+    });
+  };
+  inputQ.addEventListener('input', () => { cbQ = inputQ.value; cbTodos = false; pinta(); });
+  const encab = () => descFiltros().filter(([k]) => k !== 'Estado' && k !== 'Búsqueda');
+  $$('.cb-xls').onclick = () => {
+    const rows = [
+      ['COBERTURAS POR MARCA — batalla por cliente — Seguimiento Pepsico'],
+      ...encab().map(([k, v]) => [k, v]),
+      ['Vista', estadoAct().lbl],
+      ...(cbQ ? [['Búsqueda', cbQ]] : []),
+      ['Datos al', D.ultimaFecha.split('-').reverse().join('/')],
+      ['Criterio', 'Cubierto = 3 unidades netas o mas de la marca en el mes (FAC - NCR, por fecha de entrega). Entre parentesis, unidades netas.'],
+      [],
+      cols.map(c => c.lbl),
+      ...vis.map(r => cols.map(c => c.xls(r))),
+    ];
+    const hoy = new Date().toISOString().slice(0, 10);
+    descargarArchivo(`batalla-coberturas-${hoy}.xlsx`, buildXlsx([{ name: 'Batalla coberturas', rows, widths: cols.map(c => c.w) }]),
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  };
+  $$('.cb-pdf').onclick = () => {
+    const sub = encab().map(([k, v]) => k + ': ' + v).join(' · ') + ' · Vista: ' + estadoAct().lbl
+      + (cbQ ? ' · Búsqueda: ' + cbQ : '') + ' · Datos al ' + D.ultimaFecha.split('-').reverse().join('/');
+    const bytes = buildPdf({
+      titulo: 'Coberturas por marca — qué le falta a cada cliente',
+      sub,
+      cols: cols.map(c => ({ lbl: c.lbl, w: c.w, der: !!c.der })),
+      filas: vis.map(r => cols.map(c => String(c.xls(r)))),
+    });
+    const hoy = new Date().toISOString().slice(0, 10);
+    descargarArchivo(`batalla-coberturas-${hoy}.pdf`, bytes, 'application/pdf');
+  };
+  pinta();
   return card;
 }
 
