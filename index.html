@@ -249,6 +249,15 @@ tfoot td { padding-top: 9px; font-weight: 650; font-size: 14px; }
 .fdnum b { font-weight: 650; }
 .fdnum .obj { color: var(--muted); font-size: 11px; }
 @media (max-width: 780px) { .kpi.ancho { grid-column: span 1; } }
+/* cada celda lleva el % arriba y los clientes abajo (cubiertos/objetivo · faltan), pedido
+   2026-10-20; el detalle va chico para que las 9 marcas + universo entren sin scroll lateral */
+.cobm .cob-pie { display: block; font-size: 10.5px; font-weight: 600; line-height: 1.3; color: var(--ink2); opacity: .85; margin-top: 1px; }
+.cobm .cob-faltan { color: var(--bad); font-weight: 700; }
+.cobm .cob-ok { color: var(--good); font-weight: 700; }
+.cobm th.cob-uni, .cobm td.cob-uni { text-align: right; font-weight: 650; border-right: 2px solid var(--border); }
+.cobm th, .cobm td { padding-left: 5px; padding-right: 5px; }
+.cobm td.nom { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.cobm thead th { white-space: normal; line-height: 1.25; vertical-align: bottom; }
 .cobm td.cob-click { cursor: pointer; }
 .cobm td.cob-click:hover { text-decoration: underline; }
 .cobm td.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -3688,13 +3697,25 @@ function cubiertoMarca(i, b) { // cubierto si junta >=3 unidades netas de la mar
   }
   return false;
 }
+// Cada celda muestra el % de cobertura y, debajo, los números en CLIENTES (pedido del usuario
+// 2026-10-20): cubiertos / objetivo en clientes, y cuántos faltan para llegar. El objetivo en
+// clientes es el % de la marca aplicado al universo del vendedor, redondeado hacia arriba — con
+// uno menos no se llega al porcentaje.
+const objCli = (uni, obj) => Math.ceil(uni * obj / 100);
 function celdaCob(cubiertos, uni, obj, v, b, eqi) {
   if (!uni) return '<td>—</td>';
   const p = 100 * cubiertos / uni;
   const cls = p >= obj ? 'c-ok' : (p >= obj - 5 ? 'c-casi' : 'c-bajo');
   const ref = v !== undefined ? ` data-v="${esc(v)}"` : (eqi !== undefined ? ` data-eq="${eqi}"` : '');
   const click = ref ? ` cob-click"${ref} data-b="${b}" tabindex="0" role="button` : '';
-  return `<td class="${cls}${click}" title="${fmt(cubiertos)} de ${fmt(uni)} clientes · objetivo ${obj.toLocaleString('es-AR')}%">${Math.round(p)}%</td>`;
+  const meta = objCli(uni, obj);
+  const faltan = Math.max(0, meta - cubiertos);
+  // en dos renglones: así el ancho de la columna lo manda "faltan NN" y no la línea entera,
+  // y las 9 marcas + universo entran a 1280 px sin scroll lateral
+  const pie = `<span class="cob-pie">${fmt(cubiertos)}/${fmt(meta)}<br>`
+    + (faltan ? `<b class="cob-faltan">faltan ${fmt(faltan)}</b>` : '<b class="cob-ok">cumplido</b>')
+    + '</span>';
+  return `<td class="${cls}${click}" title="${fmt(cubiertos)} de ${fmt(uni)} clientes cubiertos · objetivo ${obj.toLocaleString('es-AR')}% = ${fmt(meta)} clientes${faltan ? ' · faltan ' + fmt(faltan) : ' · cumplido'}">${Math.round(p)}%${pie}</td>`;
 }
 const NOMBRE_VEND = {};
 for (const eq of D.equipos) for (const v of eq.vends) NOMBRE_VEND[v.cod] = v.nombre;
@@ -4219,6 +4240,7 @@ function cardCobGeneral(eqs) {
   const ths = MARCAS.map(([m, obj]) => `<th class="marca">${esc(m)}<span class="obj">obj ${obj.toLocaleString('es-AR')}%</span></th>`).join('');
   const trs = filas.map(f => `<tr>
       <td class="nom">${esc(f.sup)}</td>
+      <td class="cob-uni">${fmt(f.uni)}</td>
       ${MARCAS.map(([, obj], b) => celdaCob(f.cubs[b], f.uni, obj, undefined, b, f.eqi)).join('')}
     </tr>`).join('');
   const card = document.createElement('div');
@@ -4226,12 +4248,12 @@ function cardCobGeneral(eqs) {
   card.innerHTML = `
     <div class="card-head">
       <span class="rol">Coberturas por marca — General (suma de los equipos)</span>
-      <span class="cobm-sub">Cubierto = ≥3 unidades netas de la marca en el mes (devoluciones y NC restan). Celda verde = objetivo alcanzado · ámbar = a menos de 5 puntos · rojo = por debajo. <b>Clic en una celda</b> para ver los clientes cubiertos y los que faltan del equipo.</span>
+      <span class="cobm-sub">Cubierto = ≥3 unidades netas de la marca en el mes (devoluciones y NC restan). En cada celda: el <b>% de cobertura</b> y debajo <b>clientes cubiertos / objetivo en clientes</b> y cuántos faltan (el objetivo en clientes es el % de la marca sobre el <b>universo</b> del equipo, redondeado hacia arriba). Celda verde = objetivo alcanzado · ámbar = a menos de 5 puntos · rojo = por debajo. <b>Clic en una celda</b> para ver los clientes cubiertos y los que faltan del equipo.</span>
     </div>
     <div class="tbl-scroll"><table class="cobm">
-      <thead><tr><th class="nom">Equipo</th>${ths}</tr></thead>
+      <thead><tr><th class="nom">Equipo</th><th class="cob-uni" title="Clientes de la cartera que quedan con los filtros elegidos">Universo</th>${ths}</tr></thead>
       <tbody>${trs}</tbody>
-      <tfoot><tr><td class="nom">Total general</td>${MARCAS.map(([, obj], b) => celdaCob(tot.cubs[b], tot.uni, obj)).join('')}</tr></tfoot>
+      <tfoot><tr><td class="nom">Total general</td><td class="cob-uni">${fmt(tot.uni)}</td>${MARCAS.map(([, obj], b) => celdaCob(tot.cubs[b], tot.uni, obj)).join('')}</tr></tfoot>
     </table></div>`;
   card.querySelectorAll('td.cob-click').forEach(td => {
     td.addEventListener('click', () => toggleCobDet(td));
@@ -4252,6 +4274,7 @@ function cardCobMarcas(eq) {
   const ths = MARCAS.map(([m, obj]) => `<th class="marca">${esc(m)}<span class="obj">obj ${obj.toLocaleString('es-AR')}%</span></th>`).join('');
   const trs = filas.map(f => `<tr>
       <td class="nom"><span class="cod">${esc(f.cod)}</span> ${esc(titulo(f.nombre))}</td>
+      <td class="cob-uni">${fmt(f.uni)}</td>
       ${MARCAS.map(([, obj], b) => celdaCob(f.cubs[b], f.uni, obj, f.cod, b)).join('')}
     </tr>`).join('');
   const card = document.createElement('div');
@@ -4259,12 +4282,12 @@ function cardCobMarcas(eq) {
   card.innerHTML = `
     <div class="card-head">
       <span class="rol">Coberturas por marca — ${esc(eq.sup)}</span>
-      <span class="cobm-sub">Cubierto = ≥3 unidades netas de la marca en el mes (devoluciones y NC restan${mesSels.size > 1 ? '; con varios meses, cubierto en al menos uno' : ''})${fechaSel ? ' · la ronda de visita no aplica a este cuadro: se evalúa el mes completo' : ''}. Celda verde = objetivo alcanzado · ámbar = a menos de 5 puntos · rojo = por debajo. <b>Clic en una celda</b> para ver los clientes cubiertos y los que faltan.</span>
+      <span class="cobm-sub">Cubierto = ≥3 unidades netas de la marca en el mes (devoluciones y NC restan${mesSels.size > 1 ? '; con varios meses, cubierto en al menos uno' : ''})${fechaSel ? ' · la ronda de visita no aplica a este cuadro: se evalúa el mes completo' : ''}. En cada celda: el <b>% de cobertura</b> y debajo <b>clientes cubiertos / objetivo en clientes</b> y cuántos faltan — el objetivo en clientes es el % de la marca aplicado al <b>universo</b> del vendedor (la columna nueva), redondeado hacia arriba. Celda verde = objetivo alcanzado · ámbar = a menos de 5 puntos · rojo = por debajo. <b>Clic en una celda</b> para ver los clientes cubiertos y los que faltan.</span>
     </div>
     <div class="tbl-scroll"><table class="cobm">
-      <thead><tr><th class="nom">Vendedor</th>${ths}</tr></thead>
+      <thead><tr><th class="nom">Vendedor</th><th class="cob-uni" title="Clientes de la cartera que quedan con los filtros elegidos">Universo</th>${ths}</tr></thead>
       <tbody>${trs}</tbody>
-      <tfoot><tr><td class="nom">Total equipo</td>${MARCAS.map(([, obj], b) => celdaCob(tot.cubs[b], tot.uni, obj)).join('')}</tr></tfoot>
+      <tfoot><tr><td class="nom">Total equipo</td><td class="cob-uni">${fmt(tot.uni)}</td>${MARCAS.map(([, obj], b) => celdaCob(tot.cubs[b], tot.uni, obj)).join('')}</tr></tfoot>
     </table></div>`;
   card.querySelectorAll('td.cob-click').forEach(td => {
     td.addEventListener('click', () => toggleCobDet(td));
