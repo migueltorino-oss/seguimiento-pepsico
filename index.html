@@ -520,6 +520,12 @@ footer.nota b { color: var(--ink2); }
     reajusta solo.
     Los filtros recortan el objetivo en la misma proporción que a los clientes; la marca negra en la
     barra de cobertura señala dónde queda el objetivo. Avance = CCC en firme / objetivo.
+    La columna <b>Faltan</b> (pedido del usuario 2026-10-26) dice <b>cuántos CNC hay que convertir
+    todavía para llegar al objetivo</b>: objetivo − (CCC en firme + Pendiente), porque el pendiente
+    ya es venta hecha y sólo espera que liquide el camión. Ojo que <b>no es el complemento exacto del
+    Avance</b>, que se mide sólo contra el CCC en firme: un vendedor con pendientes tiene menos por
+    salir a buscar de lo que sugiere su porcentaje. Cuando el objetivo ya está cubierto la celda dice
+    "cumplido", y el <b>CNC</b> de al lado es la pecera de donde salen esos clientes.
     <b>Coberturas por marca:</b> mismo criterio que el CCC aplicado a cada marca — cliente cubierto si
     junta ≥3 unidades netas de la marca en el mes (FAC − NCR, por fecha de entrega, incluye lo facturado
     sin liquidar); objetivos % del reporte RUMBO de Pepsico. <b>Tienda Perfecta:</b> del censo RUMBO
@@ -1739,6 +1745,10 @@ function renderKpis() {
 const vendVisible = v => equiposVisibles().some(eq => eq.vends.some(x => x.cod === v));
 
 // ---------- tablas por equipo ----------
+// CNC que faltan convertir para llegar al objetivo: objetivo − (CCC en firme + pendiente), porque
+// el pendiente ya es venta hecha (sólo falta que liquide el camión). Nunca negativo: si el objetivo
+// ya está cubierto, es 0 y la celda lo muestra cumplido.
+const faltanCCC = s => Math.max(0, Math.round((s.obj || 0) - (s.ccc + s.trans)));
 function colsActuales() {
   return [
     { k: 'cod', label: 'Vendedor', get: s => +s.cod, cls: 'nom' },
@@ -1748,6 +1758,10 @@ function colsActuales() {
     { k: 'ccc', label: 'CCC', get: s => s.ccc },
     { k: 'pend', label: 'Pend.', get: s => s.trans },
     { k: 'cnc', label: 'CNC', get: s => s.cnc },
+    // cuántos CNC hay que convertir todavía para llegar al objetivo (pedido del usuario
+    // 2026-10-26). Se mide contra CCC+Pendiente porque el pendiente ya está vendido: lo que
+    // falta salir a buscar es la diferencia con el objetivo.
+    ...(OBJ ? [{ k: 'falta', label: 'Faltan', get: s => faltanCCC(s) }] : []),
     ...(OBJ ? [{ k: 'av', label: 'Avance', get: s => pct(s.ccc, s.obj) }] : []),
     { k: 'cob', label: 'Cobertura', get: s => pct(s.ccc + s.trans, s.cart), cls: 'cob' },
   ];
@@ -1774,8 +1788,17 @@ function cardCCC(eqs) {
   const col = COLS.find(c => c.k === ordK) || COLS[0];
   const celObj = r => OBJ ? `<td>${fmt(r.obj)}</td>` : '';
   const celAv = r => OBJ ? `<td>${r.obj > 0 ? pill(pct(r.ccc, r.obj), UMBRAL_AVANCE) : '—'}</td>` : '';
+  // "Faltan" = CNC que hay que convertir para llegar al objetivo; en rojo lo que falta, en verde
+  // cuando ya está cumplido. El title aclara contra qué se mide, que no es lo mismo que el avance.
+  const celFalta = r => {
+    if (!OBJ) return '';
+    if (!(r.obj > 0)) return '<td><span class="no">—</span></td>';
+    const f = faltanCCC(r);
+    return `<td title="Objetivo ${fmt(r.obj)} − CCC+Pendiente ${fmt(r.ccc + r.trans)}; tiene ${fmt(r.cnc)} CNC para elegir">`
+      + (f ? `<b class="si-bad">${fmt(f)}</b>` : '<b class="si">cumplido</b>') + '</td>';
+  };
   const tds = r => `<td>${fmt(r.cart)}</td>${celObj(r)}<td><b>${fmt(r.ccc + r.trans)}</b></td>
-    <td>${fmt(r.ccc)}</td><td>${fmt(r.trans)}</td><td>${fmt(r.cnc)}</td>${celAv(r)}
+    <td>${fmt(r.ccc)}</td><td>${fmt(r.trans)}</td><td>${fmt(r.cnc)}</td>${celFalta(r)}${celAv(r)}
     <td class="cob">${barCob(r.ccc, r.trans, r.cart, r.obj)}</td>`;
   const trs = [];
   let tot = { ...CCC_CERO }, nVend = 0;
@@ -1800,7 +1823,7 @@ function cardCCC(eqs) {
     <div class="card-head">
       <span class="rol">CCC — ${fmt(nVend)} ${nVend === 1 ? 'vendedor' : 'vendedores'} · el detalle por cliente está en la batalla, al pie de la solapa</span>
       <h2>${eqs.length === 1 ? medallon(eqs[0].sup) + esc(eqs[0].sup) : 'Todos los equipos'}</h2>
-      <span class="resumen">Universo <b>${fmt(tot.cart)}</b> · CCC <b>${fmt(tot.ccc)}</b>${OBJ ? ` · Obj. <b>${fmt(tot.obj)}</b> · Avance ${tot.obj > 0 ? pill(pct(tot.ccc, tot.obj), UMBRAL_AVANCE) : '—'}` : ''} · Cob. <b>${fmtPct(pct(tot.ccc + tot.trans, tot.cart))}</b></span>
+      <span class="resumen">Universo <b>${fmt(tot.cart)}</b> · CCC <b>${fmt(tot.ccc)}</b>${OBJ ? ` · Obj. <b>${fmt(tot.obj)}</b> · Avance ${tot.obj > 0 ? pill(pct(tot.ccc, tot.obj), UMBRAL_AVANCE) : '—'} · faltan <b>${fmt(faltanCCC(tot))}</b> CNC` : ''} · Cob. <b>${fmtPct(pct(tot.ccc + tot.trans, tot.cart))}</b></span>
     </div>
     <div class="tbl-scroll"><table>
       <thead><tr>${ths}</tr></thead>
