@@ -3585,7 +3585,7 @@ function cardStock() {
   };
   const celdas = (r, kgFoto, d, ks) => {
     const [ing, antes] = ingresos(r, ks), sin = kgFoto - antes, fin = sin + ing;
-    const vd = vendido(r.f, ks), hoy = r.f === c.ult.f;
+    const vd = vendido(r.f, ks), hoy = r.f === c.ultGlobal.f;
     return `<td class="gtot" title="foto de las ${esc(r.h || HORA_DEF + ' (estimada)')}: ${fmt(kgFoto)} kg${antes ? ' − ' + fmt(antes) + ' kg ingresados antes de la foto' : ''}">${fmt(sin)}</td>
       <td class="${ing ? 'stk-entro' : 'no'}">${ing ? '+' + fmt(ing) : '—'}</td><td><b>${fmt(fin)}</b></td>
       <td class="${vd ? '' : 'no'}" title="${hoy ? 'pedidos cargados hasta la última actualización: el día todavía está abierto' : 'pedidos cargados ese día'}">${vd ? '−' + fmt(vd) + (hoy ? '*' : '') : '—'}</td><td>${chipDias(stkDias(fin, d))}</td>`;
@@ -3622,7 +3622,7 @@ function cardStock() {
       <span class="cobm-sub">Una fila por foto diaria del stock disponible (la primera corrida del día, ≈ apertura). Días de stock = kg en stock ÷ venta diaria en kg de ${esc(stkSubSel(c))} <b>del mes de cada foto</b>: kg entregados en el mes hasta hoy ÷ sus días hábiles con entrega (Pepsico entrega de lunes a viernes; ${esc(stkDiasTxt())}). La columna "Diaria kg" es la de ${esc(D.labels[c.mesDiaria] || c.mesDiaria)}. El stock es del depósito y no cambia con los filtros: lo que se recorta es la venta, así que los días dicen cuánto cubre el stock al ritmo de la selección. Semáforo: rojo &lt; 10 días o &gt; 25, ámbar 10 a 13, verde 14 a 25.</span></div>
     <div class="tbl-scroll"><table class="fdtax-tabla comp-tabla">
       <thead>
-        <tr><th></th><th class="grupo gtot">Venta</th>${fotos.map(r => `<th class="grupo gtot" colspan="5">${fmtFecha(r.f)}${r.f === c.ult.f ? ' · actual' : ''}</th>`).join('')}</tr>
+        <tr><th></th><th class="grupo gtot">Venta</th>${fotos.map(r => `<th class="grupo gtot" colspan="5">${fmtFecha(r.f)}${r.f === c.ultGlobal.f ? ' · actual' : ''}</th>`).join('')}</tr>
         <tr><th class="nom">Categoría</th><th class="gtot" title="Venta diaria de ${esc(D.labels[c.mesDiaria] || c.mesDiaria)}">Diaria kg ${esc((D.labels[c.mesDiaria] || '').split(' ')[0].slice(0, 3).toLowerCase())}</th>${fotos.map(() => '<th class="gtot" title="Stock del día sin las facturas ingresadas ese día">Stock sin ingreso kg</th><th title="Kg de las facturas de Pepsico ingresadas al depósito ese día">Facturas ingresadas kg</th><th title="Stock sin ingreso + facturas ingresadas">Stock final kg</th><th title="Kg de los pedidos (facturas de venta) cargados ese día">Vendido kg</th><th title="Stock final ÷ venta diaria">Días</th>').join('')}</tr>
       </thead>
       <tbody>${filas}</tbody>
@@ -3679,7 +3679,7 @@ function cardStockArts(c) {
     </details>`;
   }).join('');
   card.innerHTML = `
-    <div class="card-head"><span class="rol">Stock Pepsico · ${esc(fmtFecha(c.ult.f))}</span><h2>Detalle por artículo</h2>
+    <div class="card-head"><span class="rol">Stock Pepsico · ${esc(fmtFecha(c.ultGlobal.f))}</span><h2>Detalle por artículo</h2>
       <span class="cobm-sub">Stock de la última foto en cajas y kg, cuánto cambió contra la foto anterior (compras − ventas − ajustes), venta diaria en cajas de ${esc(stkSubSel(c))} y días de stock (stock ÷ venta diaria, en unidades). Ordenado de menos a más días: arriba lo que quiebra primero; "s/venta" = sin venta de la selección en el mes (venta diaria = la del mes en curso hasta hoy ÷ sus días con entrega). Al final de cada bloque, los artículos <b>sin stock</b> que se vendieron en los últimos 30 días; los que no tienen stock ni venta en 30 días se consideran discontinuados y no se muestran.</span></div>
     <div class="bt-tools"><label class="ciclo"><input type="checkbox" id="stkCrit" ${STK_SOLO_CRIT ? 'checked' : ''}> solo artículos con menos de 10 días o sin stock</label></div>
     <div class="val-body">${bloques}</div>`;
