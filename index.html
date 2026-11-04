@@ -3544,19 +3544,24 @@ function cardStock() {
     return card;
   }
   const dT = c.diaria.reduce((a, b) => a + b, 0);
-  const celdas = (cj, kg, d, cls) => `<td class="${cls || ''}">${fmt(cj)}</td><td>${fmt(kg)}</td><td>${chipDias(stkDias(kg, d))}</td>`;
-  const filas = c.fotos.slice().reverse().map(r => `<tr><td class="nom">${fmtFecha(r.f)}${r.f === c.ult.f ? ' <span class="objmini">actual</span>' : ''}</td>
-    ${STK.cats.map((_, k) => celdas(r.cj[k], r.kg[k], c.diaria[k], 'gtot')).join('')}${celdas(sum4(r.cj), sum4(r.kg), dT, 'gtot')}</tr>`).join('');
+  // categorías en filas y fechas en columnas, la más nueva a la izquierda (pedido del usuario
+  // 2026-11-04). Con más de 4 fotos la fecha lleva solo Kg y Días (las cajas quedan en el tooltip)
+  // para que entre más historia sin correr la tabla.
+  const fotos = c.fotos.slice().reverse(), conCj = fotos.length <= 4;
+  const celdas = (cj, kg, d) => (conCj ? `<td class="gtot">${fmt(cj)}</td><td>${fmt(kg)}</td>` : `<td class="gtot" title="${fmt(cj)} cajas">${fmt(kg)}</td>`) + `<td>${chipDias(stkDias(kg, d))}</td>`;
+  const filaCat = (nom, d, get, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td class="nom"><b>${esc(nom)}</b></td><td class="gtot"><b>${fmt(d)}</b></td>
+    ${fotos.map(r => { const [cj, kg] = get(r); return celdas(cj, kg, d); }).join('')}</tr>`;
+  const filas = STK.cats.map((n, k) => filaCat(n, c.diaria[k], r => [r.cj[k], r.kg[k]])).join('')
+    + filaCat('Total Pepsico', dT, r => [sum4(r.cj), sum4(r.kg)], 'subt');
   card.innerHTML = `
     <div class="card-head"><span class="rol">Stock Pepsico · depósito Local</span><h2>Stock por día y categoría</h2>
       <span class="cobm-sub">Una fila por foto diaria del stock disponible (la primera corrida del día, ≈ apertura). Días de stock = kg en stock ÷ venta diaria en kg de ${esc(stkSubSel(c))}, promedio de ${esc(STK.meses3.map(m => D.labels[m] || m).join(', '))} (${fmt(STK.dias3)} días corridos). El stock es del depósito y no cambia con los filtros: lo que se recorta es la venta, así que los días dicen cuánto cubre el stock al ritmo de la selección. Semáforo: rojo &lt; 10 días o &gt; 25, ámbar 10 a 13, verde 14 a 25.</span></div>
     <div class="tbl-scroll"><table class="fdtax-tabla comp-tabla">
       <thead>
-        <tr><th></th>${STK.cats.map(n => `<th class="grupo gtot" colspan="3">${esc(n)}</th>`).join('')}<th class="grupo gtot" colspan="3">Total Pepsico</th></tr>
-        <tr><th class="nom">Fecha</th>${[...STK.cats, 'T'].map(() => '<th class="gtot">Cajas</th><th>Kg</th><th>Días</th>').join('')}</tr>
+        <tr><th></th><th class="grupo gtot">Venta</th>${fotos.map(r => `<th class="grupo gtot" colspan="${conCj ? 3 : 2}">${fmtFecha(r.f)}${r.f === c.ult.f ? ' · actual' : ''}</th>`).join('')}</tr>
+        <tr><th class="nom">Categoría</th><th class="gtot">Diaria kg</th>${fotos.map(() => (conCj ? '<th class="gtot">Cajas</th><th>Kg</th>' : '<th class="gtot">Kg</th>') + '<th>Días</th>').join('')}</tr>
       </thead>
       <tbody>${filas}</tbody>
-      <tfoot><tr><td class="nom">Venta diaria kg</td>${c.diaria.map(x => `<td class="gtot"></td><td>${fmt(x)}</td><td></td>`).join('')}<td class="gtot"></td><td>${fmt(dT)}</td><td></td></tr></tfoot>
     </table></div>`;
   return card;
 }
