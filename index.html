@@ -1580,7 +1580,7 @@ function renderKpis() {
     <div class="kpi destacado"><div class="klabel">Tienda Perfecta</div><div class="kval">${fmt(s.tp)}</div><div class="ksub">${idxs.length ? fmtPct(pct(s.tp, idxs.length)) : '—'} del universo · portaf. ≥80 + flag + Sup Ok</div></div>${kpiVsTP}
     <div class="kpi"><div class="klabel">Faltantes a validar</div><div class="kval">${fmt(s.aval)}</div><div class="ksub">cumplen portafolio y puntaje, falta el OK del supervisor</div></div>
     <div class="kpi"><div class="klabel">Falta portafolio</div><div class="kval">${fmt(s.portaf)}</div><div class="ksub">puntaje ≥80 y portafolio &lt;80: se ganan vendiendo infaltables</div></div>
-    <div class="kpi"><div class="klabel">Infaltables pendientes</div><div class="kval">${hayInfal() ? fmt(s.falt) : '—'}</div><div class="ksub">${hayInfal() ? 'SKU sin vender en ' + fmt(s.cfalt) + ' clientes de la selección' : 'sin foto de infaltables para ' + (D.labels[TPMES] || TPMES || '').toLowerCase()}</div></div>
+    <div class="kpi"><div class="klabel">Infaltables pendientes</div><div class="kval">${hayInfal() ? fmt(s.falt) : '—'}</div><div class="ksub">${hayInfal() ? 'SKU sin cumplir en ' + fmt(s.cfalt) + ' clientes de la selección' + (TPMES >= '2026-11' ? ' · se cumple con 3 unid. en el mes' : '') : 'sin foto de infaltables para ' + (D.labels[TPMES] || TPMES || '').toLowerCase()}</div></div>
     <div class="kpi"><div class="klabel">Punt. promedio</div><div class="kval">${promVal}</div><div class="ksub">sobre ${fmt(s.cens)} censados${fc ? ' · censo al ' + fc.slice(8, 10) + '/' + fc.slice(5, 7) : ''}${promObj}</div></div>`;
     return;
   }
