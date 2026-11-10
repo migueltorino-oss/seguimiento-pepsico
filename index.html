@@ -404,6 +404,15 @@ tbody tr.subt:hover td { background: var(--page); }
 .cb-bt td.nom { max-width: 150px; }
 .cb-bt td.dir { max-width: 140px; }
 .cb-bt th, .cb-bt td { padding-left: 5px; padding-right: 5px; }
+/* celdas de marca pintadas enteras: verde = cubierta, rojo = le falta; unidades netas en blanco (pedido 2026-11-10) */
+.cb-bt td.cb-ok, .cb-bt td.cb-no { color: #fff; font-weight: 700; text-align: center; border: 2px solid var(--card); }
+.cb-bt td.cb-ok { background: #0b8a0b; }
+.cb-bt td.cb-no { background: #c43434; }
+.cb-bt tbody tr:hover td.cb-ok { background: #097a09; }
+.cb-bt tbody tr:hover td.cb-no { background: #b02c2c; }
+.cb-leyenda { display: inline-block; min-width: 22px; padding: 0 5px; border-radius: 4px; color: #fff; font-weight: 700; text-align: center; }
+.cb-leyenda.cb-ok { background: #0b8a0b; }
+.cb-leyenda.cb-no { background: #c43434; }
 
 /* Compromisos CCC · FD · TP: 16 columnas → ancho automático, encabezados en dos líneas y scroll
    lateral en pantallas angostas, así ningún título se pisa con el de al lado */
@@ -4962,8 +4971,14 @@ function cardCobBatalla(eqs) {
       tax: D.taxo[i] || '—', u, cub, faltan: cub.filter(x => !x).length,
     });
   }
+  // las 4 principales (pedido 2026-11-10): LAYS, DORITOS, CHEETOS y 3D
+  const PRINC = ['LAYS', 'DORITOS', 'CHEETOS', '3D'].map(n => MARCAS.findIndex(([m]) => m === n)).filter(b => b >= 0);
   const estados = [
     { id: 'falta', lbl: 'Le falta alguna', ok: r => r.faltan > 0 },
+    ...(PRINC.length ? [
+      { id: 'p4ninguna', lbl: 'Sin las 4 principales', ok: r => PRINC.every(b => !r.cub[b]) },
+      { id: 'p4alguna', lbl: 'Falta alguna de las 4', ok: r => PRINC.some(b => !r.cub[b]) },
+    ] : []),
     ...MARCAS.map(([m], b) => ({ id: 'm' + b, lbl: 'Sin ' + m, ok: r => !r.cub[b] })),
     { id: 'ok', lbl: 'Todas cubiertas', ok: r => r.faltan === 0 },
     { id: 'todos', lbl: 'Todos', ok: () => true },
@@ -4978,8 +4993,8 @@ function cardCobBatalla(eqs) {
     ...MARCAS.map(([m], b) => ({
       k: 'm' + b, lbl: m, w: 9, der: 1, val: r => (r.cub[b] ? 1e6 : 0) + r.u[b],
       xls: r => (r.cub[b] ? 'Si' : 'No') + ' (' + fmt(r.u[b]) + ' u.)',
-      td: r => r.cub[b] ? `<span class="si">✓</span> <span class="cod">${fmt(r.u[b])}</span>`
-        : `<span class="si-bad">✕</span>${r.u[b] !== 0 ? ` <span class="cod">${fmt(r.u[b])} u.</span>` : ''}`,
+      tdCls: r => r.cub[b] ? 'cb-ok' : 'cb-no',
+      td: r => `<span title="${r.cub[b] ? 'Cubierto' : 'Le falta'} · ${fmt(r.u[b])} u. netas">${fmt(r.u[b])}</span>`,
     })),
   ];
   const card = document.createElement('div');
@@ -4989,9 +5004,10 @@ function cardCobBatalla(eqs) {
       <span class="rol">Batalla de coberturas — qué marca le falta a cada cliente</span>
       <h2>${medallon('Batalla')}Clientes por marca</h2>
       <span class="cobm-sub">Un renglón por cliente de la cartera, con <b>los mismos filtros de arriba</b>. En cada marca:
-        <span class="si">✓</span> cubierto (3 unidades netas o más en el mes; la cifra es lo que lleva) ·
-        <span class="si-bad">✕</span> le falta (si compró algo, cuántas unidades netas lleva).
-        "Le faltan" = cuántas marcas no tiene cubiertas. Arranca en <b>Le falta alguna</b>; las pills filtran por marca.
+        <span class="cb-leyenda cb-ok">5</span> verde = cubierto (3 unidades netas o más en el mes) ·
+        <span class="cb-leyenda cb-no">1</span> rojo = le falta; el número es lo que lleva en unidades netas.
+        "Le faltan" = cuántas marcas no tiene cubiertas. Arranca en <b>Le falta alguna</b>; las pills filtran por marca, y
+        <b>4 principales</b> = LAYS, DORITOS, CHEETOS y 3D (sin ninguna de las cuatro, o le falta al menos una).
         Clic en el encabezado para ordenar; se exporta a Excel y a PDF.</span>
     </div>
     <div class="bt-tools">
@@ -5026,7 +5042,7 @@ function cardCobBatalla(eqs) {
       aria-sort="${cbOrd[0] === c.k ? (cbOrd[1] === 1 ? 'ascending' : 'descending') : 'none'}">${esc(c.lbl)} <span class="arrow">${cbOrd[0] === c.k ? (cbOrd[1] === 1 ? '▲' : '▼') : ''}</span></th>`).join('')}</tr>`;
     const tope = cbTodos ? vis.length : Math.min(vis.length, BT_TOPE);
     $$('tbody').innerHTML = vis.slice(0, tope).map(r =>
-      `<tr>${cols.map(c => `<td class="${c.cls || ''}">${c.td(r)}</td>`).join('')}</tr>`).join('')
+      `<tr>${cols.map(c => `<td class="${c.cls || ''} ${c.tdCls ? c.tdCls(r) : ''}">${c.td(r)}</td>`).join('')}</tr>`).join('')
       || `<tr><td class="nom" colspan="${cols.length}"><div class="bt-vacio">Ningún cliente coincide con los filtros elegidos.</div></td></tr>`;
     $$('.bt-resumen').innerHTML = `<b>${fmt(vis.length)}</b> clientes en la vista de <b>${fmt(todas.length)}</b> en cartera · sin cubrir:
       ${MARCAS.map(([m], b) => `${esc(m)} <b>${fmt(todas.filter(r => !r.cub[b]).length)}</b>`).join(' · ')} ·
