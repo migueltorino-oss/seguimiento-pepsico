@@ -767,7 +767,7 @@ let eqSels = new Set();  // equipos seleccionados (multi); vacio = todos
 let vendSel = '';        // codigo de vendedor; '' = todos (pisa el filtro de equipo)
 let diaSels = new Set(); // dias de visita (0=lunes..6=domingo, multi); vacio = todos
 let fechaSel = '';       // ronda de visita: fecha 'YYYY-MM-DD'; '' = todas
-let taxSels = new Set(); // taxonomias seleccionadas (A/B/C/D o '—' sin segmento, multi); vacio = todas
+let taxSels = new Set(); // taxonomias seleccionadas (A/B/C/D/Z o '—' sin segmento, multi); vacio = todas
 let subSel = '';         // indice de sub ramo en D.subramos; '' = todos
 // frecuencia de visita y ciclo real (pedido del usuario 2026-09-14, copiados del mapa de clientes)
 let frecSels = new Set(); // frecuencias (1 Semanal / 2 Cada 2 sem. / 4 Cada 4 sem. / 0 Eventual, multi); vacio = todas
@@ -1234,7 +1234,8 @@ function renderFiltros() {
     ? `Semana ${rangoSemana(LUNES_SEL)} · quincenales y mensuales según su anclaje`
     : (cicloOn ? 'elegí una fecha para activar el ciclo real' : '');
   // taxonomia: multi-select; "Todos" limpia; '—' = clientes sin segmento asignado
-  const TAXOS = ['A', 'B', 'C', 'D'];
+  // Z = segmento Z del maestro (pedido del usuario 2026-11-24); solo aparece si hay clientes Z
+  const TAXOS = ['A', 'B', 'C', 'D', ...(D.taxo.includes('Z') ? ['Z'] : [])];
   const hayST = D.taxo.some(t => !t);
   pillGroup($('pillsTax'), ['Todos', ...TAXOS, ...(hayST ? ['—'] : [])],
     t => t === 'Todos' ? taxSels.size === 0 : taxSels.has(t),
